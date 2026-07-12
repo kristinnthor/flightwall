@@ -32,4 +32,11 @@ describe('renderSettings', () => {
     r.value = '9999'; r.dispatchEvent(new Event('input', { bubbles: true }));
     expect(root.querySelector('.share-url')?.textContent).toContain('INVALID');
   });
+
+  it('does not interpret label as HTML', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, { label: '"><img src=x onerror=alert(1)>' }, 'https://x/fw/');
+    expect(root.querySelectorAll('img')).toHaveLength(0);
+    expect(root.querySelector<HTMLInputElement>('input[name=label]')?.value).toBe('"><img src=x onerror=alert(1)>');
+  });
 });

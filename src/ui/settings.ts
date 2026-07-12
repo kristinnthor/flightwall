@@ -9,10 +9,10 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   root.innerHTML = `
     <div class="settings">
       <h1>FLIGHTWALL SETUP</h1>
-      <label>LATITUDE <input name="lat" type="number" step="any" value="${initial.lat ?? ''}"></label>
-      <label>LONGITUDE <input name="lon" type="number" step="any" value="${initial.lon ?? ''}"></label>
-      <label>RADIUS KM (1–460) <input name="r" type="number" min="1" max="460" value="${initial.radiusKm ?? ''}"></label>
-      <label>LABEL <input name="label" type="text" maxlength="24" value="${initial.label ?? ''}"></label>
+      <label>LATITUDE <input name="lat" type="number" step="any"></label>
+      <label>LONGITUDE <input name="lon" type="number" step="any"></label>
+      <label>RADIUS KM (1–460) <input name="r" type="number" min="1" max="460"></label>
+      <label>LABEL <input name="label" type="text" maxlength="24"></label>
       <button type="button" class="geo-btn">USE MY LOCATION</button>
       <div class="share-url"></div>
       <div class="settings-actions">
@@ -24,6 +24,11 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
 
   const input = (name: string): HTMLInputElement =>
     root.querySelector<HTMLInputElement>(`input[name=${name}]`)!;
+
+  input('lat').value = initial.lat !== undefined ? String(initial.lat) : '';
+  input('lon').value = initial.lon !== undefined ? String(initial.lon) : '';
+  input('r').value = initial.radiusKm !== undefined ? String(initial.radiusKm) : '';
+  input('label').value = initial.label ?? '';
   const shareEl = root.querySelector<HTMLElement>('.share-url')!;
 
   const currentConfig = (): Config | null => {
