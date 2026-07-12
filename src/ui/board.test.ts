@@ -92,6 +92,7 @@ describe('Board', () => {
     const link = root.querySelector<HTMLAnchorElement>('.spotlight a');
     expect(link?.href).toBe('https://p/1');
     expect(link?.rel).not.toContain('nofollow');
+    expect(link?.rel).toContain('noopener');
     expect(root.querySelector('.spotlight img')?.getAttribute('src')).toBe('https://t/x.jpg');
     expect(root.querySelector('.spotlight')?.textContent).toContain('© Jane Doe');
   });

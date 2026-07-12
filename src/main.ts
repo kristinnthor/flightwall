@@ -30,9 +30,22 @@ if (!config) {
   renderSettings(app, {}, location.href);
 } else {
   const board = new Board(app, config);
+
+  const gearBtn = document.createElement('button');
+  gearBtn.className = 'gear-btn';
+  gearBtn.textContent = '⚙';
+  gearBtn.setAttribute('aria-label', 'Settings');
+  gearBtn.addEventListener('click', () => {
+    loop.stop();
+    renderSettings(app, config, location.href);
+  });
+  app.appendChild(gearBtn);
+
   const routesClient = new AdsbdbRoutes(localStorage);
   const photosClient = new PlanespottersPhotos(localStorage);
   const routes = new Map<string, Route | null>();
+  const routePending = new Set<string>();
+  const routeRetryAt = new Map<string, number>();
   let lastSnapshot: Snapshot | null = null;
 
   const loop = new PollLoop({
@@ -44,10 +57,21 @@ if (!config) {
       board.update(snap, routes);
       updateSpotlight(snap);
       for (const a of snap.aircraft) {
-        if (a.callsign && !routes.has(a.callsign)) {
-          routes.set(a.callsign, null); // placeholder prevents duplicate lookups
-          void routesClient.getRoute(a.callsign).then((r) => {
-            routes.set(a.callsign!, r);
+        const cs = a.callsign;
+        if (
+          cs &&
+          !routes.has(cs) &&
+          !routePending.has(cs) &&
+          (routeRetryAt.get(cs) ?? 0) <= Date.now()
+        ) {
+          routePending.add(cs);
+          void routesClient.getRoute(cs).then((r) => {
+            routePending.delete(cs);
+            if (r === undefined) {
+              routeRetryAt.set(cs, Date.now() + 60_000);
+              return;
+            }
+            routes.set(cs, r);
             if (lastSnapshot) {
               board.update(lastSnapshot, routes);
               updateSpotlight(lastSnapshot);
@@ -60,16 +84,22 @@ if (!config) {
 
   let spotlightHex: string | null = null;
   let spotlightPhoto: Photo | null = null;
+  let spotlightRendered = '';
   function updateSpotlight(snap: Snapshot): void {
     const nearest = snap.aircraft.length > 0 ? snap.aircraft[0]! : null;
     if (!nearest) {
       spotlightHex = null;
       spotlightPhoto = null;
+      spotlightRendered = '';
       board.setSpotlight(null, null, null);
       return;
     }
     if (nearest.hex === spotlightHex) {
-      board.setSpotlight(nearest, nearest.callsign ? routes.get(nearest.callsign) ?? null : null, spotlightPhoto);
+      const route = nearest.callsign ? routes.get(nearest.callsign) ?? null : null;
+      const key = nearest.hex + '|' + (spotlightPhoto?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null);
+      if (key === spotlightRendered) return;
+      spotlightRendered = key;
+      board.setSpotlight(nearest, route, spotlightPhoto);
       return;
     }
     spotlightHex = nearest.hex;
@@ -78,6 +108,8 @@ if (!config) {
       if (spotlightHex !== nearest.hex) return; // superseded meanwhile
       spotlightPhoto = photo;
       const route = nearest.callsign ? routes.get(nearest.callsign) ?? null : null;
+      const key = nearest.hex + '|' + (photo?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null);
+      spotlightRendered = key;
       board.setSpotlight(nearest, route, photo);
     });
   }
@@ -93,7 +125,7 @@ if (!config) {
 
   // Stall watchdog: if no tick for 90 s while visible, restart the loop.
   setInterval(() => {
-    if (!document.hidden && Date.now() - loop.lastTickAt > 90_000) {
+    if (!document.hidden && Date.now() - Math.max(loop.lastTickAt, loop.nextTickDueAt) > 90_000) {
       loop.stop();
       loop.start();
     }

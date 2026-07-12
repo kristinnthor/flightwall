@@ -44,12 +44,12 @@ describe('AdsbdbRoutes', () => {
     expect(f).toHaveBeenCalledTimes(1);
   });
 
-  it('returns null on network error without caching the failure', async () => {
+  it('returns undefined on network error without caching the failure', async () => {
     const f = vi.fn(async () => { throw new Error('offline'); });
     vi.stubGlobal('fetch', f);
     const client = new AdsbdbRoutes(localStorage, 'https://x/v0');
-    expect(await client.getRoute('ICE615')).toBeNull();
-    expect(await client.getRoute('ICE615')).toBeNull();
+    expect(await client.getRoute('ICE615')).toBeUndefined();
+    expect(await client.getRoute('ICE615')).toBeUndefined();
     expect(f).toHaveBeenCalledTimes(2); // transient errors are retryable
   });
 

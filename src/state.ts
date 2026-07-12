@@ -43,6 +43,7 @@ export function computeStatus(lastSuccessAt: number, now: number): 'live' | 'sta
 
 export class PollLoop {
   lastTickAt = 0;
+  nextTickDueAt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private prevHexes = new Set<string>();
   private failures = 0;
@@ -55,6 +56,8 @@ export class PollLoop {
     if (!this.stopped) return;
     this.stopped = false;
     this.generation++;
+    const now = this.opts.now ?? Date.now;
+    this.nextTickDueAt = now();
     void this.tick();
   }
 
@@ -67,6 +70,8 @@ export class PollLoop {
 
   private schedule(delayMs: number): void {
     if (this.stopped) return;
+    const now = this.opts.now ?? Date.now;
+    this.nextTickDueAt = now() + delayMs;
     this.timer = setTimeout(() => void this.tick(), delayMs);
   }
 

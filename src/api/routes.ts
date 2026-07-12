@@ -27,11 +27,12 @@ export class AdsbdbRoutes {
     storage: Storage | null,
     private baseUrl = 'https://api.adsbdb.com/v0',
     now: () => number = Date.now,
+    private timeoutMs = 10_000,
   ) {
     this.cache = new TtlCache<Route>('flightwall.routes.v1', storage, TTL_MS, 500, now);
   }
 
-  getRoute(callsign: string): Promise<Route | null> {
+  getRoute(callsign: string): Promise<Route | null | undefined> {
     const cached = this.cache.get(callsign);
     if (cached !== undefined) return Promise.resolve(cached);
     const result = this.tail.then(() => this.fetchRoute(callsign));
@@ -39,16 +40,20 @@ export class AdsbdbRoutes {
     return result;
   }
 
-  private async fetchRoute(callsign: string): Promise<Route | null> {
+  private async fetchRoute(callsign: string): Promise<Route | null | undefined> {
     const cached = this.cache.get(callsign); // may have filled while queued
     if (cached !== undefined) return cached;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl}/callsign/${encodeURIComponent(callsign)}`);
+      const res = await fetch(`${this.baseUrl}/callsign/${encodeURIComponent(callsign)}`, {
+        signal: controller.signal,
+      });
       if (res.status === 404) {
         this.cache.set(callsign, null);
         return null;
       }
-      if (!res.ok) return null; // transient — do not cache
+      if (!res.ok) return undefined; // transient — do not cache
       const body: AdsbdbBody = await res.json();
       const fr = typeof body.response === 'object' ? body.response?.flightroute : undefined;
       if (!fr) {
@@ -65,7 +70,9 @@ export class AdsbdbRoutes {
       this.cache.set(callsign, route);
       return route;
     } catch {
-      return null; // network error — transient, not cached
+      return undefined; // network error / abort — transient, not cached
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

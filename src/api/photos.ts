@@ -18,6 +18,7 @@ export class PlanespottersPhotos {
     storage: Storage | null,
     private baseUrl = 'https://api.planespotters.net/pub',
     now: () => number = Date.now,
+    private timeoutMs = 10_000,
   ) {
     this.cache = new TtlCache<Photo>('flightwall.photos.v1', storage, TTL_MS, 200, now);
   }
@@ -26,8 +27,12 @@ export class PlanespottersPhotos {
     if (hex.startsWith('~')) return null; // non-ICAO address, no DB entry
     const cached = this.cache.get(hex);
     if (cached !== undefined) return cached;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl}/photos/hex/${encodeURIComponent(hex)}`);
+      const res = await fetch(`${this.baseUrl}/photos/hex/${encodeURIComponent(hex)}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) return null; // includes 403 off-origin — transient, not cached
       const body: PlanespottersBody = await res.json();
       const p = (body.photos ?? [])[0];
@@ -43,7 +48,9 @@ export class PlanespottersPhotos {
       this.cache.set(hex, photo);
       return photo;
     } catch {
-      return null;
+      return null; // network error / abort — transient, not cached
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

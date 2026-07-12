@@ -133,6 +133,21 @@ describe('PollLoop', () => {
     loop.stop();
   });
 
+  it('nextTickDueAt tracks scheduled backoff and start()', async () => {
+    let call = 0;
+    const { loop } = makeLoop(async () => {
+      call++;
+      if (call === 1) throw new Error('boom');
+      return [ac('a', 5)];
+    });
+    loop.start();
+    const startNow = Date.now();
+    expect(loop.nextTickDueAt).toBeLessThanOrEqual(startNow);
+    await vi.advanceTimersByTimeAsync(0); // call 1 fails → backoff(1, 5000, 0.5) = 5000ms
+    expect(loop.nextTickDueAt).toBe(Date.now() + 5000);
+    loop.stop();
+  });
+
   it('stop()+start() during in-flight fetch discards the stale tick', async () => {
     let call = 0;
     let resolveFirst!: (v: Aircraft[]) => void;

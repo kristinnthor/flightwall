@@ -138,6 +138,7 @@ export class Board {
     const link = el('a');
     link.href = photo.pageLink;
     link.target = '_blank';
+    link.rel = 'noopener';
     const img = el('img');
     img.src = photo.thumbnailUrl;
     img.alt = a.callsign ?? a.hex;

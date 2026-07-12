@@ -157,3 +157,6 @@ html, body {
 .share-url { color: var(--green); font-size: 18px; word-break: break-all; min-height: 26px; }
 .settings-actions { display: flex; gap: 16px; }
 .settings-hint { color: var(--dim); font-size: 17px; }
+
+.gear-btn { position: absolute; right: 24px; bottom: 24px; background: none; border: 0; color: var(--dim); font-size: 28px; opacity: 0.35; cursor: pointer; }
+.gear-btn:hover { opacity: 1; }
