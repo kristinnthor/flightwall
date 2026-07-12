@@ -1,30 +1,32 @@
-// Create a complete localStorage polyfill that includes clear()
-const store: Record<string, string> = {};
+// Node 25 ships an experimental global `localStorage` that collides with
+// happy-dom's. Replace it with a clean in-memory Storage implementation so
+// tests behave the same on every Node version.
+class MemoryStorage implements Storage {
+  private store = new Map<string, string>();
 
-const storagePolyfill: Storage = {
-  getItem(key: string): string | null {
-    return store[key] ?? null;
-  },
-  setItem(key: string, value: string): void {
-    store[key] = value;
-  },
-  removeItem(key: string): void {
-    delete store[key];
-  },
-  clear(): void {
-    for (const key in store) {
-      delete store[key];
-    }
-  },
-  key(index: number): string | null {
-    const keys = Object.keys(store);
-    return keys[index] ?? null;
-  },
   get length(): number {
-    return Object.keys(store).length;
-  },
-} as unknown as Storage;
+    return this.store.size;
+  }
 
-if (typeof globalThis !== 'undefined') {
-  (globalThis as any).localStorage = storagePolyfill;
+  clear(): void {
+    this.store.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.store.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return Array.from(this.store.keys())[index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.store.set(key, value);
+  }
 }
+
+globalThis.localStorage = new MemoryStorage();

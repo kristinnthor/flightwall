@@ -16,10 +16,14 @@ export function isValidConfig(c: unknown): c is Config {
 
 export function parseHash(hash: string): Config | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const latRaw = params.get('lat');
+  const lonRaw = params.get('lon');
+  const rRaw = params.get('r');
+  if (!latRaw || !lonRaw || !rRaw) return null;
   const cfg: Record<string, unknown> = {
-    lat: Number(params.get('lat')),
-    lon: Number(params.get('lon')),
-    radiusKm: Number(params.get('r')),
+    lat: Number(latRaw),
+    lon: Number(lonRaw),
+    radiusKm: Number(rRaw),
   };
   const label = params.get('label');
   if (label) cfg.label = label;

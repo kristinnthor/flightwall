@@ -13,6 +13,9 @@ describe('parseHash', () => {
   it.each([
     ['', null], ['#', null],
     ['#lat=64&lon=-21', null],                 // missing r
+    ['#r=50', null],                           // missing lat and lon
+    ['#lon=10&r=50', null],                    // missing lat
+    ['#lat=64&r=50', null],                    // missing lon
     ['#lat=abc&lon=-21&r=50', null],           // NaN
     ['#lat=91&lon=0&r=50', null],              // lat out of range
     ['#lat=0&lon=181&r=50', null],             // lon out of range
