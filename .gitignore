@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.wgt
+.tizen/
+.remember/
+.DS_Store
