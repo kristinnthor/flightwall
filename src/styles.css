@@ -133,3 +133,27 @@ html, body {
   padding-top: 18px;
 }
 .age { color: var(--amber); }
+
+.settings {
+  color: var(--white);
+  font-family: 'B612 Mono', Consolas, Menlo, monospace;
+  max-width: 760px;
+  margin: 120px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  font-size: 24px;
+}
+.settings h1 { color: var(--amber); letter-spacing: 0.1em; }
+.settings label { display: flex; justify-content: space-between; gap: 16px; color: var(--dim); }
+.settings input {
+  background: var(--panel); color: var(--amber); border: 1px solid var(--amber-dim);
+  font: inherit; padding: 8px 12px; width: 340px;
+}
+.settings button {
+  background: var(--amber); color: var(--bg); border: 0; font: inherit; font-weight: 700;
+  padding: 12px 20px; cursor: pointer;
+}
+.share-url { color: var(--green); font-size: 18px; word-break: break-all; min-height: 26px; }
+.settings-actions { display: flex; gap: 16px; }
+.settings-hint { color: var(--dim); font-size: 17px; }
