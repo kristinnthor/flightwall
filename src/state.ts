@@ -47,16 +47,20 @@ export class PollLoop {
   private prevHexes = new Set<string>();
   private failures = 0;
   private stopped = true;
+  private generation = 0;
 
   constructor(private opts: PollLoopOptions) {}
 
   start(): void {
+    if (!this.stopped) return;
     this.stopped = false;
+    this.generation++;
     void this.tick();
   }
 
   stop(): void {
     this.stopped = true;
+    this.generation++;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
   }
@@ -68,6 +72,7 @@ export class PollLoop {
 
   private async tick(): Promise<void> {
     if (this.stopped) return;
+    const gen = this.generation;
     const now = this.opts.now ?? Date.now;
     this.lastTickAt = now();
     if (this.opts.isHidden?.()) {
@@ -77,6 +82,7 @@ export class PollLoop {
     const { lat, lon, radiusKm } = this.opts.config;
     try {
       const list = await this.opts.provider.fetchAircraft(lat, lon, radiusKm);
+      if (this.stopped || gen !== this.generation) return;
       list.sort((a, b) => a.distanceKm - b.distanceKm);
       const hexes = new Set(list.map((a) => a.hex));
       const entered = new Set([...hexes].filter((h) => !this.prevHexes.has(h)));
@@ -86,6 +92,7 @@ export class PollLoop {
       this.opts.onUpdate({ aircraft: list, entered, left, lastSuccessAt: now() });
       this.schedule(this.opts.intervalMs ?? 5_000);
     } catch {
+      if (this.stopped || gen !== this.generation) return;
       this.failures++;
       this.opts.onError?.(this.failures);
       this.schedule(backoffDelay(this.failures, this.opts.intervalMs ?? 5_000, this.opts.random));

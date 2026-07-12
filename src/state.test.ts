@@ -108,4 +108,54 @@ describe('PollLoop', () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+
+  it('stop() during in-flight fetch discards the tick', async () => {
+    let resolveFetch!: (v: Aircraft[]) => void;
+    const pending = new Promise<Aircraft[]>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const { loop, updates } = makeLoop(() => pending);
+    loop.start(); // synchronously calls fetchAircraft and suspends on the await
+    loop.stop();
+    resolveFetch([ac('a', 5)]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('start() is idempotent', async () => {
+    const fetcher = vi.fn(async () => [ac('a', 5)]);
+    const { loop } = makeLoop(fetcher);
+    loop.start();
+    loop.start(); // no-op: loop is already running
+    await vi.advanceTimersByTimeAsync(10_000);
+    // single 5s cadence: calls at t=0, 5s, 10s — not doubled to 6
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    loop.stop();
+  });
+
+  it('stop()+start() during in-flight fetch discards the stale tick', async () => {
+    let call = 0;
+    let resolveFirst!: (v: Aircraft[]) => void;
+    const firstPromise = new Promise<Aircraft[]>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const { loop, updates } = makeLoop(async () => {
+      call++;
+      if (call === 1) return firstPromise;
+      return [ac('b', 5)];
+    });
+
+    loop.start(); // tick #1 in flight, awaiting firstPromise
+    loop.stop();
+    loop.start(); // restarted chain kicks off tick #2
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updates.some((u) => u.aircraft.some((a) => a.hex === 'b'))).toBe(true);
+
+    resolveFirst([ac('zzz', 99)]); // stale tick #1 resolves after the restart
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updates.some((u) => u.aircraft.some((a) => a.hex === 'zzz'))).toBe(false);
+
+    loop.stop();
+  });
 });
