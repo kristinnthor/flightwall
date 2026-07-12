@@ -22,6 +22,7 @@ export class Board {
   private ageEl: HTMLElement;
   private spotlightEl: HTMLElement;
   private rowNodes = new Map<string, HTMLElement>();
+  private exitingNodes = new Map<string, { node: HTMLElement; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(root: HTMLElement, config: Config) {
     root.innerHTML = '';
@@ -71,7 +72,11 @@ export class Board {
       if (!visibleHexes.has(hex)) {
         this.rowNodes.delete(hex);
         node.classList.add('row-exit');
-        setTimeout(() => node.remove(), 600);
+        const timer = setTimeout(() => {
+          node.remove();
+          this.exitingNodes.delete(hex);
+        }, 600);
+        this.exitingNodes.set(hex, { node, timer });
       }
     }
 
@@ -80,6 +85,12 @@ export class Board {
     visible.forEach((a, i) => {
       let node = this.rowNodes.get(a.hex);
       if (!node) {
+        const exiting = this.exitingNodes.get(a.hex);
+        if (exiting) {
+          clearTimeout(exiting.timer);
+          exiting.node.remove();
+          this.exitingNodes.delete(a.hex);
+        }
         node = el('div', 'row row-enter');
         node.setAttribute('data-hex', a.hex);
         this.rowNodes.set(a.hex, node);

@@ -68,6 +68,13 @@ describe('Board', () => {
     expect(root.querySelector('.clear-skies')?.textContent).toContain('CLEAR SKIES');
   });
 
+  it('does not leave a duplicate node when a hex exits and re-enters before its exit timeout fires', () => {
+    board.update(snap([ac('aaa', 3)]), new Map());
+    board.update(snap([]), new Map());
+    board.update(snap([ac('aaa', 3)]), new Map());
+    expect(root.querySelectorAll('[data-hex="aaa"]')).toHaveLength(1);
+  });
+
   it('tickClock sets status attribute', () => {
     const t = Date.now();
     board.tickClock(t + 20_000, t);
