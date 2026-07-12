@@ -7,7 +7,7 @@ import { PollLoop, type Snapshot } from './state';
 import { Board } from './ui/board';
 import { renderSettings } from './ui/settings';
 import { tvInit } from './tizen';
-import type { Route } from './types';
+import type { Route, Photo } from './types';
 
 const app = document.getElementById('app');
 if (!app) throw new Error('missing #app');
@@ -18,6 +18,9 @@ function fitToScreen(): void {
 }
 window.addEventListener('resize', fitToScreen);
 fitToScreen();
+
+// Reconfigure when the hash changes (e.g. new link opened on the TV).
+window.addEventListener('hashchange', () => location.reload());
 
 tvInit();
 
@@ -56,17 +59,24 @@ if (!config) {
   });
 
   let spotlightHex: string | null = null;
+  let spotlightPhoto: Photo | null = null;
   function updateSpotlight(snap: Snapshot): void {
     const nearest = snap.aircraft.length > 0 ? snap.aircraft[0]! : null;
     if (!nearest) {
       spotlightHex = null;
+      spotlightPhoto = null;
       board.setSpotlight(null, null, null);
       return;
     }
-    if (nearest.hex === spotlightHex) return;
+    if (nearest.hex === spotlightHex) {
+      board.setSpotlight(nearest, nearest.callsign ? routes.get(nearest.callsign) ?? null : null, spotlightPhoto);
+      return;
+    }
     spotlightHex = nearest.hex;
+    spotlightPhoto = null;
     void photosClient.getPhoto(nearest.hex).then((photo) => {
       if (spotlightHex !== nearest.hex) return; // superseded meanwhile
+      spotlightPhoto = photo;
       const route = nearest.callsign ? routes.get(nearest.callsign) ?? null : null;
       board.setSpotlight(nearest, route, photo);
     });
@@ -94,7 +104,4 @@ if (!config) {
   const next4am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0);
   if (next4am.getTime() <= now.getTime()) next4am.setDate(next4am.getDate() + 1);
   setTimeout(() => location.reload(), next4am.getTime() - now.getTime());
-
-  // Reconfigure when the hash changes (e.g. new link opened on the TV).
-  window.addEventListener('hashchange', () => location.reload());
 }
