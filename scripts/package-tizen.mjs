@@ -17,6 +17,10 @@ cpSync('tizen/config.xml', `${STAGE}/config.xml`);
 cpSync('tizen/icon.png', `${STAGE}/icon.png`);
 
 const profile = process.env.TIZEN_PROFILE || 'flightwall';
+if (!/^[\w.-]+$/.test(profile)) {
+  console.error(`Invalid TIZEN_PROFILE "${profile}" — use letters, digits, dot, dash, underscore only.`);
+  process.exit(1);
+}
 try {
   execSync('tizen version', { stdio: 'pipe' });
 } catch {
