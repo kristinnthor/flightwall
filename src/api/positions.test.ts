@@ -54,11 +54,11 @@ describe('normalizeAircraft', () => {
 describe('buildPointUrl', () => {
   it('converts km to nm, rounded up', () => {
     expect(buildPointUrl('https://x/v2', 64.13, -21.94, 50))
-      .toBe('https://x/v2/point/64.13/-21.94/27'); // 50/1.852=27.0 -> ceil 28? 26.99->27
+      .toBe('https://x/v2/point/64.13/-21.94/27'); // 50/1.852 = 26.998 -> ceil -> 27
   });
   it('caps at 250 nm and floors at 1', () => {
-    expect(buildPointUrl('https://x/v2', 0, 0, 463)).toBe('https://x/v2/point/0/0/250');
-    expect(buildPointUrl('https://x/v2', 0, 0, 1)).toBe('https://x/v2/point/0/0/1');
+    expect(buildPointUrl('https://x/v2', 0, 0, 500)).toBe('https://x/v2/point/0/0/250');
+    expect(buildPointUrl('https://x/v2', 0, 0, 0)).toBe('https://x/v2/point/0/0/1');
   });
 });
 
