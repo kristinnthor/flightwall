@@ -20,21 +20,30 @@ if (!app) throw new Error('missing #app');
 
 let docMode = false;
 
+// TV webviews can report one viewport at startup and settle on another
+// without firing resize — measure the real visible area and re-fit late.
+function viewportSize(): { w: number; h: number } {
+  const vv = window.visualViewport;
+  return vv && vv.width > 0
+    ? { w: vv.width, h: vv.height }
+    : { w: window.innerWidth, h: window.innerHeight };
+}
+
 function fitToScreen(): void {
   if (docMode) return;
-  app!.style.transform = computeStageTransform(window.innerWidth, window.innerHeight).transform;
+  const { w, h } = viewportSize();
+  app!.style.transform = computeStageTransform(w, h).transform;
 }
 window.addEventListener('resize', fitToScreen);
+window.visualViewport?.addEventListener('resize', fitToScreen);
 fitToScreen();
+for (const ms of [300, 1000, 3000]) setTimeout(fitToScreen, ms);
 
 // Settings render as a normal responsive document, not on the scaled stage.
 function enterDocMode(): void {
   docMode = true;
   app!.style.transform = ''; // the inline stage transform would beat the class rule
   document.body.classList.add('doc-mode');
-  document
-    .querySelector('meta[name=viewport]')
-    ?.setAttribute('content', 'width=device-width, initial-scale=1');
 }
 
 // Reconfigure when the hash changes (e.g. new link opened on the TV).

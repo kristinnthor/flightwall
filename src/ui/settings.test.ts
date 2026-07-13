@@ -89,6 +89,27 @@ describe('renderSettings', () => {
     expect(document.activeElement).toBe(root.querySelector('input[name=label]'));
   });
 
+  it('ArrowRight/ArrowLeft move between buttons but not inside inputs', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, {}, 'https://x/fw/');
+    const send = (key: string): void => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    };
+    root.querySelector<HTMLButtonElement>('.copy-btn')!.focus();
+    send('ArrowRight');
+    expect(document.activeElement).toBe(root.querySelector('.start-btn'));
+    send('ArrowRight');
+    expect(document.activeElement).toBe(root.querySelector('.reset-btn'));
+    send('ArrowLeft');
+    expect(document.activeElement).toBe(root.querySelector('.start-btn'));
+    // inputs keep left/right for caret movement
+    const lat = root.querySelector<HTMLInputElement>('input[name=lat]')!;
+    lat.focus();
+    send('ArrowRight');
+    expect(document.activeElement).toBe(lat);
+  });
+
   it('RESET clears stored config and caches, strips the hash, and reloads', () => {
     localStorage.clear();
     localStorage.setItem('flightwall.config', '{"lat":1}');

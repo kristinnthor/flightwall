@@ -62,11 +62,17 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   // Explicit up/down focus travel: TV remotes have no Tab key, and native
   // spatial navigation is unreliable inside forms.
   root.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const active = document.activeElement as HTMLElement | null;
+    const vertical = e.key === 'ArrowDown' || e.key === 'ArrowUp';
+    // Left/right travel only between buttons — inputs need them for the caret.
+    const horizontal =
+      (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && active?.tagName === 'BUTTON';
+    if (!vertical && !horizontal) return;
     const focusables = [...root.querySelectorAll<HTMLElement>('input, button')];
-    const idx = focusables.indexOf(document.activeElement as HTMLElement);
+    const idx = focusables.indexOf(active as HTMLElement);
     if (idx === -1) return;
-    const next = focusables[idx + (e.key === 'ArrowDown' ? 1 : -1)];
+    const forward = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+    const next = focusables[idx + (forward ? 1 : -1)];
     if (next) {
       e.preventDefault();
       next.focus();
