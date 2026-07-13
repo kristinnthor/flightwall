@@ -162,6 +162,13 @@ html, body {
 }
 .settings-hint { color: var(--dim); font-size: 17px; }
 
+/* TV remote focus visibility — remotes navigate by focus. */
+.settings input:focus, .settings button:focus,
+.gear-btn:focus, .board-reset-btn:focus {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* Settings mode: normal document flow instead of the scaled stage. */
 body.doc-mode { overflow: auto; }
 body.doc-mode #app {

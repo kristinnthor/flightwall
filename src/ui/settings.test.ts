@@ -40,6 +40,12 @@ describe('renderSettings', () => {
     expect(root.querySelector<HTMLInputElement>('input[name=label]')?.value).toBe('"><img src=x onerror=alert(1)>');
   });
 
+  it('focuses the first input on render (TV remote lands on the form)', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, {}, 'https://x/fw/');
+    expect(document.activeElement).toBe(root.querySelector('input[name=lat]'));
+  });
+
   it('RESET clears stored config and caches, strips the hash, and reloads', () => {
     localStorage.clear();
     localStorage.setItem('flightwall.config', '{"lat":1}');

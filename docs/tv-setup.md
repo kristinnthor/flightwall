@@ -44,6 +44,13 @@ The app appears on the TV home row. Launch it once; done.
 Bump `version` in `tizen/config.xml`, re-run the two commands above.
 Keep the same certificate profile — updates must be signed by the same author.
 
+## Using the TV remote in the app
+
+- **On the board:** press **OK/Enter** to open Settings. **BACK** exits the app.
+- **In Settings:** arrow keys move between fields (amber outline shows focus),
+  **OK** selects/opens the on-screen keyboard, **BACK** returns to the board
+  without saving. START applies and returns to the board.
+
 ## TV settings checklist (set-and-forget)
 
 | Setting | Value | Why |

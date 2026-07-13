@@ -21,7 +21,8 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
         <button type="button" class="start-btn">START</button>
         <button type="button" class="reset-btn">RESET</button>
       </div>
-      <p class="settings-hint">Open the copied link on the TV — the wall configures itself from the URL.</p>
+      <p class="settings-hint">Open the copied link on the TV — the wall configures itself from the URL.
+        On a TV remote: arrows move, OK selects, BACK returns to the board.</p>
     </div>`;
 
   const input = (name: string): HTMLInputElement =>
@@ -50,6 +51,8 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
 
   root.addEventListener('input', refresh);
   refresh();
+  input('lat').focus(); // TV remotes navigate by focus — land on the form
+
 
   root.querySelector('.geo-btn')?.addEventListener('click', () => {
     navigator.geolocation?.getCurrentPosition((pos) => {

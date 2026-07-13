@@ -40,11 +40,31 @@ function enterDocMode(): void {
 // Reconfigure when the hash changes (e.g. new link opened on the TV).
 window.addEventListener('hashchange', () => location.reload());
 
+// TV remote (and keyboard): OK/Enter on the board opens settings; BACK/Return
+// (Tizen keyCode 10009) inside settings goes back to the board. On the board,
+// BACK keeps its default behavior (exits the app).
+const TIZEN_BACK = 10009;
+let openSettingsFromRemote: (() => void) | null = null;
+document.addEventListener('keydown', (e) => {
+  if (docMode) {
+    if (e.keyCode === TIZEN_BACK) {
+      e.preventDefault();
+      location.reload();
+    }
+    return;
+  }
+  if (e.key === 'Enter' && openSettingsFromRemote) {
+    e.preventDefault();
+    openSettingsFromRemote();
+  }
+});
+
 tvInit();
 
 // PWA: cache the shell for instant starts; APIs are never cached. Skipped in
-// the packaged Tizen app (non-http origin).
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+// the packaged Tizen app (non-http origin) and in dev (the SW's cache-first
+// asset strategy would serve stale Vite modules across edits).
+if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {
       // registration is best-effort; the app is fully functional without it
@@ -75,12 +95,14 @@ if (!config) {
   gearBtn.className = 'gear-btn';
   gearBtn.textContent = '⚙';
   gearBtn.setAttribute('aria-label', 'Settings');
-  gearBtn.addEventListener('click', () => {
+  const openSettings = (): void => {
     settingsOpen = true;
     loop.stop();
     enterDocMode();
     renderSettings(app, config, location.href);
-  });
+  };
+  gearBtn.addEventListener('click', openSettings);
+  openSettingsFromRemote = openSettings;
   app.appendChild(gearBtn);
 
   const resetBtn = document.createElement('button');
