@@ -4,6 +4,13 @@ import { climbArrow, compass16, formatAgeSeconds, formatAlt, formatDistanceKm } 
 
 const MAX_ROWS = 12;
 
+/** Per-aircraft display extras, keyed by hex: plausibility-checked route plus
+ *  registered-operator fallback for the AIRLINE column. */
+export interface RowExtras {
+  route: Route | null;
+  operator: string | null;
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -64,7 +71,7 @@ export class Board {
     root.appendChild(this.boardEl);
   }
 
-  update(snap: Snapshot, routes: Map<string, Route | null>): void {
+  update(snap: Snapshot, extras: Map<string, RowExtras>): void {
     const visible = snap.aircraft.slice(0, MAX_ROWS);
     const visibleHexes = new Set(visible.map((a) => a.hex));
 
@@ -95,7 +102,7 @@ export class Board {
         node.setAttribute('data-hex', a.hex);
         this.rowNodes.set(a.hex, node);
       }
-      this.fillRow(node, a, routes);
+      this.fillRow(node, a, extras.get(a.hex));
       const current = this.rowsEl.children[i];
       if (current !== node) this.rowsEl.insertBefore(node, current ?? null);
     });
@@ -109,13 +116,13 @@ export class Board {
     }
   }
 
-  private fillRow(node: HTMLElement, a: Aircraft, routes: Map<string, Route | null>): void {
-    const route = a.callsign ? routes.get(a.callsign) ?? null : null;
+  private fillRow(node: HTMLElement, a: Aircraft, extras: RowExtras | undefined): void {
+    const route = extras?.route ?? null;
     const routeText = route?.originCode && route?.destCode
       ? `${route.originCode}→${route.destCode}` : '—';
     const cells = [
       a.callsign ?? a.registration ?? a.hex.toUpperCase(),
-      (route?.airlineName ?? '—').toUpperCase(),
+      (route?.airlineName ?? extras?.operator ?? '—').toUpperCase(),
       routeText,
       a.typeCode ?? '—',
       a.registration ?? '—',
@@ -128,7 +135,7 @@ export class Board {
     for (const c of cells) node.appendChild(el('span', 'cell', c));
   }
 
-  setSpotlight(a: Aircraft | null, route: Route | null, photo: Photo | null): void {
+  setSpotlight(a: Aircraft | null, route: Route | null, photo: Photo | null, operator: string | null = null): void {
     this.spotlightEl.innerHTML = '';
     if (!a || !photo) {
       this.spotlightEl.hidden = true;
@@ -147,7 +154,8 @@ export class Board {
 
     const info = el('div', 'spotlight-info');
     const parts: string[] = [];
-    if (route?.airlineName) parts.push(route.airlineName);
+    const airline = route?.airlineName ?? operator;
+    if (airline) parts.push(airline);
     if (route?.originCity && route?.destCity) parts.push(`${route.originCity} → ${route.destCity}`);
     if (a.typeCode) parts.push(a.typeCode);
     info.appendChild(el('div', 'spotlight-line', parts.join(' · ') || (a.callsign ?? a.hex)));

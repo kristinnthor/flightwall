@@ -236,6 +236,19 @@ pointer, data-source attribution + terms summary (airplanes.live non-commercial 
   button into a red "RESET?" for 5 s; a second click confirms (same `performReset`
   routine as the settings RESET); the timeout disarms it. Both hotspots have enlarged
   padded hit areas (the scaled stage makes bare glyphs ~10 px targets on small windows).
+- **Data coverage upgrade (v1.2):** three additions to reduce "—" cells while never
+  showing wrong data:
+  1. *Operator fallback* — `AircraftInfo` (adsbdb `/v0/aircraft/{hex}`, hexdb aircraft as
+     fallback) resolves the registered operator by hex; the AIRLINE column and spotlight
+     use it whenever the route yields no airline (charters, cargo, GA).
+  2. *Corridor plausibility gate* — `isRoutePlausible` (pure, `routecheck.ts`): a route
+     displays only if the aircraft lies within a 1.25× detour factor (400 km absolute
+     slack floor) of the origin→destination great circle. Applies to BOTH route sources;
+     suppresses stale/wrong callsign-keyed routes (e.g. FRA→IVL shown while landing KEF).
+     `Route` gained airport coordinates to support this.
+  3. *Second route source* — hexdb `route/icao` ICAO pairs, resolved via cached hexdb
+     airport lookups (30-day TTL), used only after an adsbdb definitive miss and gated by
+     the same plausibility check. Fallback routes carry codes but no airline/city names.
 - **App icon:** "radar sweep" mark — amber plane inside a radar ring with sweep wedge on
   the near-black tile. Source of truth `public/favicon.svg`; PNG renditions generated
   from the same geometry: `public/favicon-48.png` (tab fallback),

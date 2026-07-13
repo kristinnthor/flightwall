@@ -24,8 +24,12 @@ export interface Route {
   airlineName: string | null;
   originCode: string | null;
   originCity: string | null;
+  originLat: number | null;
+  originLon: number | null;
   destCode: string | null;
   destCity: string | null;
+  destLat: number | null;
+  destLon: number | null;
 }
 
 export interface Photo {

@@ -6,8 +6,8 @@ const OK_BODY = {
     flightroute: {
       callsign: 'ICE615',
       airline: { name: 'Icelandair', icao: 'ICE', iata: 'FI' },
-      origin: { iata_code: 'KEF', icao_code: 'BIKF', municipality: 'Reykjavík' },
-      destination: { iata_code: 'JFK', icao_code: 'KJFK', municipality: 'New York' },
+      origin: { iata_code: 'KEF', icao_code: 'BIKF', municipality: 'Reykjavík', latitude: 63.985, longitude: -22.6056 },
+      destination: { iata_code: 'JFK', icao_code: 'KJFK', municipality: 'New York', latitude: 40.6398, longitude: -73.7789 },
     },
   },
 };
@@ -21,8 +21,8 @@ describe('AdsbdbRoutes', () => {
     const r = await new AdsbdbRoutes(localStorage, 'https://x/v0').getRoute('ICE615');
     expect(r).toEqual({
       airlineName: 'Icelandair',
-      originCode: 'KEF', originCity: 'Reykjavík',
-      destCode: 'JFK', destCity: 'New York',
+      originCode: 'KEF', originCity: 'Reykjavík', originLat: 63.985, originLon: -22.6056,
+      destCode: 'JFK', destCity: 'New York', destLat: 40.6398, destLon: -73.7789,
     });
   });
 

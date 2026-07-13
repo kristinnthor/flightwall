@@ -5,6 +5,8 @@ interface AdsbdbAirport {
   iata_code?: string;
   icao_code?: string;
   municipality?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface AdsbdbBody {
@@ -64,8 +66,12 @@ export class AdsbdbRoutes {
         airlineName: fr.airline?.name ?? null,
         originCode: fr.origin?.iata_code ?? fr.origin?.icao_code ?? null,
         originCity: fr.origin?.municipality ?? null,
+        originLat: fr.origin?.latitude ?? null,
+        originLon: fr.origin?.longitude ?? null,
         destCode: fr.destination?.iata_code ?? fr.destination?.icao_code ?? null,
         destCity: fr.destination?.municipality ?? null,
+        destLat: fr.destination?.latitude ?? null,
+        destLon: fr.destination?.longitude ?? null,
       };
       this.cache.set(callsign, route);
       return route;

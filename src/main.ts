@@ -2,14 +2,17 @@ import './styles.css';
 import { loadConfig } from './config';
 import { AirplanesLiveProvider } from './api/positions';
 import { AdsbdbRoutes } from './api/routes';
+import { HexdbRoutes, HexdbAirports } from './api/hexdb';
+import { AircraftInfo } from './api/aircraft';
 import { PlanespottersPhotos } from './api/photos';
+import { isRoutePlausible } from './routecheck';
 import { PollLoop, type Snapshot } from './state';
-import { Board } from './ui/board';
+import { Board, type RowExtras } from './ui/board';
 import { renderSettings } from './ui/settings';
 import { armButton } from './ui/armed';
 import { performReset } from './reset';
 import { tvInit } from './tizen';
-import type { Route, Photo } from './types';
+import type { Aircraft, Route, Photo } from './types';
 
 const app = document.getElementById('app');
 if (!app) throw new Error('missing #app');
@@ -53,11 +56,87 @@ if (!config) {
   app.appendChild(resetBtn);
 
   const routesClient = new AdsbdbRoutes(localStorage);
+  const hexRoutesClient = new HexdbRoutes(localStorage);
+  const airportsClient = new HexdbAirports(localStorage);
+  const aircraftClient = new AircraftInfo(localStorage);
   const photosClient = new PlanespottersPhotos(localStorage);
   const routes = new Map<string, Route | null>();
   const routePending = new Set<string>();
   const routeRetryAt = new Map<string, number>();
+  const operators = new Map<string, string | null>();
+  const opPending = new Set<string>();
+  const opRetryAt = new Map<string, number>();
   let lastSnapshot: Snapshot | null = null;
+
+  // Route as displayed for one aircraft: cached route gated by the corridor
+  // plausibility check against the aircraft's current position.
+  function plausibleRouteFor(a: Aircraft): Route | null {
+    const r = a.callsign ? routes.get(a.callsign) ?? null : null;
+    return r && isRoutePlausible(r, a) ? r : null;
+  }
+
+  function buildExtras(snap: Snapshot): Map<string, RowExtras> {
+    const extras = new Map<string, RowExtras>();
+    for (const a of snap.aircraft) {
+      extras.set(a.hex, {
+        route: plausibleRouteFor(a),
+        operator: operators.get(a.hex) ?? null,
+      });
+    }
+    return extras;
+  }
+
+  function rerender(): void {
+    if (!lastSnapshot) return;
+    board.update(lastSnapshot, buildExtras(lastSnapshot));
+    updateSpotlight(lastSnapshot);
+  }
+
+  // adsbdb first; on a definitive miss, hexdb's callsign→ICAO-pair as second
+  // source, resolved to coordinates so the plausibility gate applies to it too.
+  async function resolveRoute(cs: string): Promise<void> {
+    const primary = await routesClient.getRoute(cs);
+    if (primary === undefined) {
+      routeRetryAt.set(cs, Date.now() + 60_000);
+      return;
+    }
+    if (primary !== null) {
+      routes.set(cs, primary);
+      return;
+    }
+    const pair = await hexRoutesClient.getRoutePair(cs);
+    if (pair === undefined) {
+      routeRetryAt.set(cs, Date.now() + 60_000);
+      return;
+    }
+    if (pair === null) {
+      routes.set(cs, null);
+      return;
+    }
+    const [origin, dest] = await Promise.all([
+      airportsClient.getAirport(pair.originIcao),
+      airportsClient.getAirport(pair.destIcao),
+    ]);
+    if (origin === undefined || dest === undefined) {
+      routeRetryAt.set(cs, Date.now() + 60_000);
+      return;
+    }
+    if (!origin || !dest) {
+      routes.set(cs, null);
+      return;
+    }
+    routes.set(cs, {
+      airlineName: null,
+      originCode: origin.iata ?? origin.icao,
+      originCity: null,
+      originLat: origin.lat,
+      originLon: origin.lon,
+      destCode: dest.iata ?? dest.icao,
+      destCity: null,
+      destLat: dest.lat,
+      destLon: dest.lon,
+    });
+  }
 
   const loop = new PollLoop({
     provider: new AirplanesLiveProvider(),
@@ -65,28 +144,36 @@ if (!config) {
     isHidden: () => document.hidden,
     onUpdate: (snap) => {
       lastSnapshot = snap;
-      board.update(snap, routes);
+      board.update(snap, buildExtras(snap));
       updateSpotlight(snap);
+      const now = Date.now();
       for (const a of snap.aircraft) {
         const cs = a.callsign;
-        if (
-          cs &&
-          !routes.has(cs) &&
-          !routePending.has(cs) &&
-          (routeRetryAt.get(cs) ?? 0) <= Date.now()
-        ) {
+        if (cs && !routes.has(cs) && !routePending.has(cs) && (routeRetryAt.get(cs) ?? 0) <= now) {
           routePending.add(cs);
-          void routesClient.getRoute(cs).then((r) => {
+          void resolveRoute(cs).then(() => {
             routePending.delete(cs);
-            if (r === undefined) {
-              routeRetryAt.set(cs, Date.now() + 60_000);
+            rerender();
+          });
+        }
+        // Operator fallback: once the route question is settled (or there is
+        // no callsign to ask about) and it yielded no airline, ask the registry.
+        const routeSettled = cs ? routes.has(cs) : true;
+        const hasAirline = cs ? Boolean(routes.get(cs)?.airlineName) : false;
+        if (
+          routeSettled && !hasAirline &&
+          !operators.has(a.hex) && !opPending.has(a.hex) &&
+          (opRetryAt.get(a.hex) ?? 0) <= now
+        ) {
+          opPending.add(a.hex);
+          void aircraftClient.getOperator(a.hex).then((op) => {
+            opPending.delete(a.hex);
+            if (op === undefined) {
+              opRetryAt.set(a.hex, Date.now() + 60_000);
               return;
             }
-            routes.set(cs, r);
-            if (lastSnapshot) {
-              board.update(lastSnapshot, routes);
-              updateSpotlight(lastSnapshot);
-            }
+            operators.set(a.hex, op);
+            rerender();
           });
         }
       }
@@ -106,11 +193,12 @@ if (!config) {
       return;
     }
     if (nearest.hex === spotlightHex) {
-      const route = nearest.callsign ? routes.get(nearest.callsign) ?? null : null;
-      const key = nearest.hex + '|' + (spotlightPhoto?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null);
+      const route = plausibleRouteFor(nearest);
+      const operator = operators.get(nearest.hex) ?? null;
+      const key = nearest.hex + '|' + (spotlightPhoto?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null) + '|' + (operator ?? '');
       if (key === spotlightRendered) return;
       spotlightRendered = key;
-      board.setSpotlight(nearest, route, spotlightPhoto);
+      board.setSpotlight(nearest, route, spotlightPhoto, operator);
       return;
     }
     spotlightHex = nearest.hex;
@@ -118,10 +206,11 @@ if (!config) {
     void photosClient.getPhoto(nearest.hex).then((photo) => {
       if (spotlightHex !== nearest.hex) return; // superseded meanwhile
       spotlightPhoto = photo;
-      const route = nearest.callsign ? routes.get(nearest.callsign) ?? null : null;
-      const key = nearest.hex + '|' + (photo?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null);
+      const route = plausibleRouteFor(nearest);
+      const operator = operators.get(nearest.hex) ?? null;
+      const key = nearest.hex + '|' + (photo?.thumbnailUrl ?? '') + '|' + JSON.stringify(route ?? null) + '|' + (operator ?? '');
       spotlightRendered = key;
-      board.setSpotlight(nearest, route, photo);
+      board.setSpotlight(nearest, route, photo, operator);
     });
   }
 
