@@ -249,6 +249,16 @@ pointer, data-source attribution + terms summary (airplanes.live non-commercial 
   3. *Second route source* — hexdb `route/icao` ICAO pairs, resolved via cached hexdb
      airport lookups (30-day TTL), used only after an adsbdb definitive miss and gated by
      the same plausibility check. Fallback routes carry codes but no airline/city names.
+- **PWA (v1.3):** installable on phones/tablets. `manifest.webmanifest` (fullscreen,
+  `orientation: landscape`, radar-sweep icons 192/512 incl. maskable) + hand-rolled
+  `sw.js` (shell cached: navigations network-first, hashed assets cache-first;
+  cross-origin APIs/photos never intercepted). The board is landscape-only everywhere:
+  portrait viewports render it rotated 90° (`computeStageTransform` in `stage.ts`) since
+  iOS ignores manifest orientation; Android installed apps launch landscape natively
+  (plus a guarded `screen.orientation.lock` attempt). Settings render in "doc mode" —
+  normal responsive document flow with a device-width viewport — instead of the scaled
+  stage, so the form is phone-usable. SW registration is skipped on non-http origins
+  (packaged Tizen app unaffected).
 - **App icon:** "radar sweep" mark — amber plane inside a radar ring with sweep wedge on
   the near-black tile. Source of truth `public/favicon.svg`; PNG renditions generated
   from the same geometry: `public/favicon-48.png` (tab fallback),

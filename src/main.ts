@@ -1,5 +1,6 @@
 import './styles.css';
 import { loadConfig } from './config';
+import { computeStageTransform } from './stage';
 import { AirplanesLiveProvider } from './api/positions';
 import { AdsbdbRoutes } from './api/routes';
 import { HexdbRoutes, HexdbAirports } from './api/hexdb';
@@ -17,23 +18,56 @@ import type { Aircraft, Route, Photo } from './types';
 const app = document.getElementById('app');
 if (!app) throw new Error('missing #app');
 
+let docMode = false;
+
 function fitToScreen(): void {
-  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-  app!.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  if (docMode) return;
+  app!.style.transform = computeStageTransform(window.innerWidth, window.innerHeight).transform;
 }
 window.addEventListener('resize', fitToScreen);
 fitToScreen();
+
+// Settings render as a normal responsive document, not on the scaled stage.
+function enterDocMode(): void {
+  docMode = true;
+  app!.style.transform = ''; // the inline stage transform would beat the class rule
+  document.body.classList.add('doc-mode');
+  document
+    .querySelector('meta[name=viewport]')
+    ?.setAttribute('content', 'width=device-width, initial-scale=1');
+}
 
 // Reconfigure when the hash changes (e.g. new link opened on the TV).
 window.addEventListener('hashchange', () => location.reload());
 
 tvInit();
 
+// PWA: cache the shell for instant starts; APIs are never cached. Skipped in
+// the packaged Tizen app (non-http origin).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // registration is best-effort; the app is fully functional without it
+    });
+  });
+}
+
 const config = loadConfig(location.hash, localStorage);
 
 if (!config) {
+  enterDocMode();
   renderSettings(app, {}, location.href);
 } else {
+  // Installed-PWA nicety (Android honors it; iOS has no lock API): try to pin
+  // landscape. Harmless rejection everywhere else.
+  try {
+    const orientation = screen.orientation as unknown as {
+      lock?: (o: string) => Promise<void>;
+    };
+    orientation.lock?.('landscape').catch(() => {});
+  } catch {
+    // no orientation API — fine
+  }
   const board = new Board(app, config);
 
   let settingsOpen = false;
@@ -44,6 +78,7 @@ if (!config) {
   gearBtn.addEventListener('click', () => {
     settingsOpen = true;
     loop.stop();
+    enterDocMode();
     renderSettings(app, config, location.href);
   });
   app.appendChild(gearBtn);
