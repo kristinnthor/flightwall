@@ -10,9 +10,9 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   root.innerHTML = `
     <div class="settings">
       <h1>FLIGHTWALL SETUP</h1>
-      <label>LATITUDE <input name="lat" type="number" step="any"></label>
-      <label>LONGITUDE <input name="lon" type="number" step="any"></label>
-      <label>RADIUS KM (1–460) <input name="r" type="number" min="1" max="460"></label>
+      <label>LATITUDE <input name="lat" type="text" inputmode="decimal" maxlength="12"></label>
+      <label>LONGITUDE <input name="lon" type="text" inputmode="decimal" maxlength="12"></label>
+      <label>RADIUS KM (1–460) <input name="r" type="text" inputmode="decimal" maxlength="4"></label>
       <label>LABEL <input name="label" type="text" maxlength="24"></label>
       <button type="button" class="geo-btn">USE MY LOCATION</button>
       <div class="share-url"></div>
@@ -34,11 +34,17 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   input('label').value = initial.label ?? '';
   const shareEl = root.querySelector<HTMLElement>('.share-url')!;
 
+  // Comma decimals are normal on Icelandic (and most European) keyboards.
+  const num = (name: string): number => {
+    const raw = input(name).value.trim().replace(',', '.');
+    return raw === '' ? NaN : Number(raw);
+  };
+
   const currentConfig = (): Config | null => {
     const cfg: Record<string, unknown> = {
-      lat: Number(input('lat').value),
-      lon: Number(input('lon').value),
-      radiusKm: Number(input('r').value),
+      lat: num('lat'),
+      lon: num('lon'),
+      radiusKm: num('r'),
     };
     if (input('label').value) cfg.label = input('label').value;
     return isValidConfig(cfg) ? cfg : null;
@@ -52,6 +58,20 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   root.addEventListener('input', refresh);
   refresh();
   input('lat').focus(); // TV remotes navigate by focus — land on the form
+
+  // Explicit up/down focus travel: TV remotes have no Tab key, and native
+  // spatial navigation is unreliable inside forms.
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const focusables = [...root.querySelectorAll<HTMLElement>('input, button')];
+    const idx = focusables.indexOf(document.activeElement as HTMLElement);
+    if (idx === -1) return;
+    const next = focusables[idx + (e.key === 'ArrowDown' ? 1 : -1)];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  });
 
 
   root.querySelector('.geo-btn')?.addEventListener('click', () => {

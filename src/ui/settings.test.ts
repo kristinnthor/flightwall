@@ -46,6 +46,49 @@ describe('renderSettings', () => {
     expect(document.activeElement).toBe(root.querySelector('input[name=lat]'));
   });
 
+  it('uses text inputs (no number spinner trapping TV arrow keys)', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, {}, 'https://x/fw/');
+    for (const name of ['lat', 'lon', 'r']) {
+      const el = root.querySelector<HTMLInputElement>(`input[name=${name}]`)!;
+      expect(el.type).toBe('text');
+      expect(el.getAttribute('inputmode')).toBe('decimal');
+    }
+  });
+
+  it('accepts comma decimals (Icelandic keyboards)', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, {}, 'https://x/fw/');
+    const set = (name: string, v: string): void => {
+      const el = root.querySelector<HTMLInputElement>(`input[name=${name}]`)!;
+      el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    set('lat', '64,13');
+    set('lon', '-21,94');
+    set('r', '50');
+    expect(root.querySelector('.share-url')?.textContent).toContain('lat=64.13&lon=-21.94&r=50');
+  });
+
+  it('ArrowDown/ArrowUp move focus through fields and buttons', () => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, {}, 'https://x/fw/');
+    const lat = root.querySelector<HTMLInputElement>('input[name=lat]')!;
+    const lon = root.querySelector<HTMLInputElement>('input[name=lon]')!;
+    const down = (): void => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    };
+    expect(document.activeElement).toBe(lat);
+    down();
+    expect(document.activeElement).toBe(lon);
+    down(); down(); down(); // r -> label -> geo button
+    expect(document.activeElement).toBe(root.querySelector('.geo-btn'));
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(root.querySelector('input[name=label]'));
+  });
+
   it('RESET clears stored config and caches, strips the hash, and reloads', () => {
     localStorage.clear();
     localStorage.setItem('flightwall.config', '{"lat":1}');
