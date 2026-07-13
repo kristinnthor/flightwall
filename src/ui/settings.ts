@@ -1,5 +1,5 @@
 import type { Config } from '../types';
-import { isValidConfig, serializeToHash } from '../config';
+import { clearStoredConfig, isValidConfig, serializeToHash } from '../config';
 
 export function buildShareUrl(pageUrl: string, cfg: Config): string {
   return pageUrl.replace(/#.*$/, '') + serializeToHash(cfg);
@@ -18,6 +18,7 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       <div class="settings-actions">
         <button type="button" class="copy-btn">COPY LINK</button>
         <button type="button" class="start-btn">START</button>
+        <button type="button" class="reset-btn">RESET</button>
       </div>
       <p class="settings-hint">Open the copied link on the TV — the wall configures itself from the URL.</p>
     </div>`;
@@ -68,5 +69,12 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       location.hash = serializeToHash(cfg);
       location.reload();
     }
+  });
+
+  root.querySelector('.reset-btn')?.addEventListener('click', () => {
+    clearStoredConfig(localStorage);
+    // replaceState (not location.hash = '') so exactly one reload happens.
+    history.replaceState(null, '', location.pathname + location.search);
+    location.reload();
   });
 }

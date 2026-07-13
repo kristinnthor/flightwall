@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseHash, serializeToHash, isValidConfig, loadConfig } from './config';
+import { parseHash, serializeToHash, isValidConfig, loadConfig, clearStoredConfig } from './config';
 
 describe('parseHash', () => {
   it('parses a full hash', () => {
@@ -49,5 +49,20 @@ describe('loadConfig', () => {
   it('ignores corrupt storage', () => {
     localStorage.setItem('flightwall.config', '{not json');
     expect(loadConfig('', localStorage)).toBeNull();
+  });
+});
+
+describe('clearStoredConfig', () => {
+  beforeEach(() => localStorage.clear());
+  it('removes config and cache keys but leaves unrelated keys', () => {
+    localStorage.setItem('flightwall.config', '{"lat":1}');
+    localStorage.setItem('flightwall.routes.v1', '{}');
+    localStorage.setItem('flightwall.photos.v1', '{}');
+    localStorage.setItem('unrelated', 'keep');
+    clearStoredConfig(localStorage);
+    expect(localStorage.getItem('flightwall.config')).toBeNull();
+    expect(localStorage.getItem('flightwall.routes.v1')).toBeNull();
+    expect(localStorage.getItem('flightwall.photos.v1')).toBeNull();
+    expect(localStorage.getItem('unrelated')).toBe('keep');
   });
 });

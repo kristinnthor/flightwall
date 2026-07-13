@@ -2,6 +2,19 @@ import type { Config } from './types';
 
 const STORAGE_KEY = 'flightwall.config';
 
+// Must match the cache keys used in api/routes.ts and api/photos.ts.
+const ALL_KEYS = [STORAGE_KEY, 'flightwall.routes.v1', 'flightwall.photos.v1'];
+
+export function clearStoredConfig(storage: Storage): void {
+  for (const key of ALL_KEYS) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // storage unavailable: nothing to clear
+    }
+  }
+}
+
 export function isValidConfig(c: unknown): c is Config {
   if (typeof c !== 'object' || c === null) return false;
   const o = c as Record<string, unknown>;

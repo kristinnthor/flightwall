@@ -225,6 +225,19 @@ pointer, data-source attribution + terms summary (airplanes.live non-commercial 
   (interesting aircraft via `dbFlags`), multiple saved locations, sound.
 - Contributing an ADS-B feeder (future-proofs API access; both networks encourage it).
 
+## 11a. v1.1 additions (2026-07-13, user-approved)
+
+- **Reset flow:** the settings screen gains a RESET button (quiet destructive style,
+  right-aligned in the actions row). It clears the stored config AND the route/photo
+  caches (`clearStoredConfig` in `config.ts` removes all three `flightwall.*` keys),
+  strips the hash via `history.replaceState`, and reloads to the blank first-run setup.
+- **App icon:** "radar sweep" mark — amber plane inside a radar ring with sweep wedge on
+  the near-black tile. Source of truth `public/favicon.svg`; PNG renditions generated
+  from the same geometry: `public/favicon-48.png` (tab fallback),
+  `public/apple-touch-icon.png` (180 px full-bleed), and `tizen/icon.png` (512×423 TV
+  tile, replacing the placeholder "FW" tile). `index.html` links all web icons and sets
+  `theme-color`.
+
 ## 12. Risks
 
 | Risk | Mitigation |

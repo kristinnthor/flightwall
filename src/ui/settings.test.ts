@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { buildShareUrl, renderSettings } from './settings';
 
 describe('buildShareUrl', () => {
@@ -38,5 +38,25 @@ describe('renderSettings', () => {
     renderSettings(root, { label: '"><img src=x onerror=alert(1)>' }, 'https://x/fw/');
     expect(root.querySelectorAll('img')).toHaveLength(0);
     expect(root.querySelector<HTMLInputElement>('input[name=label]')?.value).toBe('"><img src=x onerror=alert(1)>');
+  });
+
+  it('RESET clears stored config and caches, strips the hash, and reloads', () => {
+    localStorage.clear();
+    localStorage.setItem('flightwall.config', '{"lat":1}');
+    localStorage.setItem('flightwall.routes.v1', '{}');
+    localStorage.setItem('flightwall.photos.v1', '{}');
+    location.hash = '#lat=64&lon=-21&r=50';
+    const reloadSpy = vi.spyOn(location, 'reload').mockImplementation(() => {});
+    const root = document.getElementById('app')!;
+    renderSettings(root, { lat: 64, lon: -21, radiusKm: 50 }, 'https://x/fw/');
+    const btn = root.querySelector<HTMLButtonElement>('.reset-btn');
+    expect(btn).not.toBeNull();
+    btn!.click();
+    expect(localStorage.getItem('flightwall.config')).toBeNull();
+    expect(localStorage.getItem('flightwall.routes.v1')).toBeNull();
+    expect(localStorage.getItem('flightwall.photos.v1')).toBeNull();
+    expect(location.href).not.toContain('#');
+    expect(reloadSpy).toHaveBeenCalled();
+    reloadSpy.mockRestore();
   });
 });
