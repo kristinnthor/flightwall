@@ -231,6 +231,11 @@ pointer, data-source attribution + terms summary (airplanes.live non-commercial 
   right-aligned in the actions row). It clears the stored config AND the route/photo
   caches (`clearStoredConfig` in `config.ts` removes all three `flightwall.*` keys),
   strips the hash via `history.replaceState`, and reloads to the blank first-run setup.
+- **Board reset hotspot:** a ↺ button next to the ⚙ gear on the board. Destructive
+  actions on the board use an arm-confirm pattern (no dialogs): first click turns the
+  button into a red "RESET?" for 5 s; a second click confirms (same `performReset`
+  routine as the settings RESET); the timeout disarms it. Both hotspots have enlarged
+  padded hit areas (the scaled stage makes bare glyphs ~10 px targets on small windows).
 - **App icon:** "radar sweep" mark — amber plane inside a radar ring with sweep wedge on
   the near-black tile. Source of truth `public/favicon.svg`; PNG renditions generated
   from the same geometry: `public/favicon-48.png` (tab fallback),

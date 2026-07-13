@@ -1,5 +1,6 @@
 import type { Config } from '../types';
-import { clearStoredConfig, isValidConfig, serializeToHash } from '../config';
+import { isValidConfig, serializeToHash } from '../config';
+import { performReset } from '../reset';
 
 export function buildShareUrl(pageUrl: string, cfg: Config): string {
   return pageUrl.replace(/#.*$/, '') + serializeToHash(cfg);
@@ -71,10 +72,5 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
     }
   });
 
-  root.querySelector('.reset-btn')?.addEventListener('click', () => {
-    clearStoredConfig(localStorage);
-    // replaceState (not location.hash = '') so exactly one reload happens.
-    history.replaceState(null, '', location.pathname + location.search);
-    location.reload();
-  });
+  root.querySelector('.reset-btn')?.addEventListener('click', performReset);
 }

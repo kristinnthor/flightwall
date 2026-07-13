@@ -6,6 +6,8 @@ import { PlanespottersPhotos } from './api/photos';
 import { PollLoop, type Snapshot } from './state';
 import { Board } from './ui/board';
 import { renderSettings } from './ui/settings';
+import { armButton } from './ui/armed';
+import { performReset } from './reset';
 import { tvInit } from './tizen';
 import type { Route, Photo } from './types';
 
@@ -42,6 +44,13 @@ if (!config) {
     renderSettings(app, config, location.href);
   });
   app.appendChild(gearBtn);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'board-reset-btn';
+  resetBtn.textContent = '↺';
+  resetBtn.setAttribute('aria-label', 'Reset FlightWall');
+  armButton(resetBtn, { armedLabel: 'RESET?', onConfirm: performReset });
+  app.appendChild(resetBtn);
 
   const routesClient = new AdsbdbRoutes(localStorage);
   const photosClient = new PlanespottersPhotos(localStorage);

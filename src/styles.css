@@ -162,5 +162,16 @@ html, body {
 }
 .settings-hint { color: var(--dim); font-size: 17px; }
 
-.gear-btn { position: absolute; right: 24px; bottom: 24px; background: none; border: 0; color: var(--dim); font-size: 28px; opacity: 0.35; cursor: pointer; }
-.gear-btn:hover { opacity: 1; }
+.gear-btn, .board-reset-btn {
+  position: absolute; bottom: 12px;
+  background: none; border: 0; color: var(--dim);
+  font: inherit; font-size: 28px; line-height: 1;
+  padding: 14px 18px; opacity: 0.35; cursor: pointer;
+}
+.gear-btn { right: 12px; }
+.board-reset-btn { right: 76px; }
+.gear-btn:hover, .board-reset-btn:hover { opacity: 1; }
+.board-reset-btn.armed {
+  color: var(--red); opacity: 1;
+  font-size: 20px; font-weight: 700; letter-spacing: 0.08em;
+}
