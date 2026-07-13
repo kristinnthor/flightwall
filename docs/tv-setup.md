@@ -16,40 +16,62 @@ Limits: the browser shows its top bar and is the least stable surface for
 ## Route 2 — real Tizen app (recommended)
 
 ### One-time PC setup
-1. Install **Tizen Studio** (with CLI) from
-   https://developer.tizen.org/development/tizen-studio/download
-   During install add the **TV Extension** and **Samsung Certificate Extension**
-   via Package Manager. Add `<tizen-studio>\tools\ide\bin` and
-   `<tizen-studio>\tools` to PATH.
-2. TV: **Apps → press 1 2 3 4 5 on the remote → Developer mode ON**, set
-   *Host PC IP* to this PC's LAN IP, reboot the TV.
-3. Find the TV's IP (Settings → Connection → Network → Network Status).
-4. Connect: `sdb connect <TV_IP>:26101` then `sdb devices` (note the device name).
-5. Certificate (Certificate Manager GUI, one time):
-   - Try **Tizen** profile first (name it `flightwall`): simplest, no account.
-   - If install later fails with a cert error, create a **Samsung** profile
-     instead: needs a free Samsung account; the TV's DUID appears automatically
-     while `sdb` is connected. Then also run:
-     `tizen install-permit -t <DEVICE_NAME>`.
+1. Install **Tizen Studio CLI** from
+   https://developer.tizen.org/development/tizen-studio/download — the
+   `web-cli_…_windows-64.exe` installer (~300 MB) is enough; the full Studio
+   isn't needed. The installer requires admin elevation. Add
+   `<tizen-studio>\tools\ide\bin` and `<tizen-studio>\tools` to PATH.
+2. The CLI install lacks the certificate GUI — add it (elevated):
+   ```powershell
+   package-manager\package-manager-cli.exe install Certificate-Manager --accept-license
+   package-manager\package-manager-cli.exe install cert-add-on --accept-license
+   ```
+   (`cert-add-on` is the Samsung Certificate Extension.)
+3. TV: open the full **Apps** screen and type **1 2 3 4 5**. Modern Frame
+   remotes have no number keys — use the number pad in the **SmartThings**
+   phone app's virtual remote, or plug a USB keyboard into the One Connect
+   box. In the Developer Mode dialog: **On**, and set *Host PC IP* to this
+   PC's exact LAN IP (it defaults to `0.0.0.0` — that must be replaced).
+   Then fully restart the TV (unplug ~10 s, not just standby).
+4. Find the TV's IP (Settings → General → Network → Network Status).
+5. Connect: `sdb connect <TV_IP>:26101` then `sdb devices` (note the serial).
+6. Certificate (Certificate Manager GUI, one time). **Go straight to a
+   Samsung profile** — 2024+ TVs reject generic Tizen certificates, and the
+   distributor cert bundled with older Studio versions is expired anyway:
+   - **+** → **Samsung** → **TV** → name it `flightwall-samsung`.
+   - Author certificate: create new, pick a password and keep it — every
+     future update must be signed with this certificate.
+   - Sign in to your (free) Samsung account when the browser opens.
+   - Distributor step: with the TV connected, its **DUID** appears in the
+     list automatically — keep it checked and **finish the whole wizard**
+     (stopping after the author step is the classic mistake).
+7. Push the install permit to the TV (one time):
+   ```powershell
+   sdb -s <SERIAL> push "$env:USERPROFILE\SamsungCertificate\flightwall-samsung\device-profile.xml" /home/owner/share/tmp/sdk_tools/device-profile.xml
+   ```
 
 ### Build, package, install
 ```powershell
-npm run package:tizen        # produces FlightWall.wgt (profile: flightwall,
-                             # override with $env:TIZEN_PROFILE)
-tizen install -n FlightWall.wgt -t <DEVICE_NAME>
+$env:TIZEN_PROFILE = 'flightwall-samsung'
+npm run package:tizen                              # produces FlightWall.wgt
+tizen install -n FlightWall.wgt -s <SERIAL>
+tizen run -p FLTWLL2026.FlightWall -s <SERIAL>     # launch from the PC (optional)
 ```
 The app appears on the TV home row. Launch it once; done.
 
 ### Updating later
-Bump `version` in `tizen/config.xml`, re-run the two commands above.
+Bump `version` in `tizen/config.xml`, re-run the build/install commands above.
 Keep the same certificate profile — updates must be signed by the same author.
+App storage (your location config) survives updates.
 
 ## Using the TV remote in the app
 
 - **On the board:** press **OK/Enter** to open Settings. **BACK** exits the app.
-- **In Settings:** arrow keys move between fields (amber outline shows focus),
-  **OK** selects/opens the on-screen keyboard, **BACK** returns to the board
-  without saving. START applies and returns to the board.
+- **In Settings:** up/down arrows move between fields, left/right move between
+  the buttons (amber outline on fields, white ring on buttons shows focus).
+  **OK** opens the on-screen keyboard on a field. Decimal commas are fine
+  (`64,13` = `64.13`). **BACK** returns to the board without saving; START
+  applies and returns to the board.
 
 ## TV settings checklist (set-and-forget)
 
