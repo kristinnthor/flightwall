@@ -31,11 +31,13 @@ if (!config) {
 } else {
   const board = new Board(app, config);
 
+  let settingsOpen = false;
   const gearBtn = document.createElement('button');
   gearBtn.className = 'gear-btn';
   gearBtn.textContent = '⚙';
   gearBtn.setAttribute('aria-label', 'Settings');
   gearBtn.addEventListener('click', () => {
+    settingsOpen = true;
     loop.stop();
     renderSettings(app, config, location.href);
   });
@@ -120,11 +122,15 @@ if (!config) {
 
   // 1 Hz clock + staleness repaint
   setInterval(() => {
+    if (settingsOpen) return;
     board.tickClock(Date.now(), lastSnapshot?.lastSuccessAt ?? bootAt);
   }, 1000);
 
   // Stall watchdog: if no tick for 90 s while visible, restart the loop.
+  // A due tick is one the loop itself scheduled — backoff waits are not stalls,
+  // and a loop stopped for the settings screen must stay stopped.
   setInterval(() => {
+    if (settingsOpen) return;
     if (!document.hidden && Date.now() - Math.max(loop.lastTickAt, loop.nextTickDueAt) > 90_000) {
       loop.stop();
       loop.start();
