@@ -70,6 +70,26 @@ at all. If you instead get a Cloudflare error page, nothing is deployed at that
 hostname — every response the worker itself produces, including its failures,
 carries `"worker": "flightwall-proxy"` and an `X-Worker` header.
 
+### Deploying the worker from CI instead
+
+Deploying by hand is where this goes wrong: the worker ends up under an
+unexpected name, or `ALLOWED_ORIGINS` never applies because the Cloudflare
+dashboard does not read `wrangler.toml`, and nothing records which hostname
+actually received it. The `deploy-worker` workflow does it reproducibly and
+prints the hostname in the run summary.
+
+It needs one repository secret, under Settings → Secrets and variables →
+Actions:
+
+| Secret | Required | Notes |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | yes | Cloudflare → My Profile → API Tokens, template "Edit Cloudflare Workers" |
+| `CLOUDFLARE_ACCOUNT_ID` | only if the token covers several accounts | Cloudflare dashboard sidebar |
+
+It runs on any push to `main` touching `worker/`, or on demand from the Actions
+tab. Without the token it logs a notice and skips, so the absence of the secret
+never fails a build.
+
 Then point the wall at it with `api`, which takes a URL template using `{lat}`,
 `{lon}` and `{nm}` (nautical miles):
 

@@ -1,0 +1,94 @@
+name: deploy-worker
+
+# The proxy in worker/ is the only thing standing between the wall and a blank
+# screen, and deploying it by hand has been the fragile step: a worker under an
+# unexpected name, ALLOWED_ORIGINS never applied because the dashboard does not
+# read wrangler.toml, and no record of which hostname actually received it.
+# Running it here makes the deploy reproducible and prints the hostname.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-worker.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Never cancelled: an interrupted wrangler deploy leaves it unclear which
+    # version is live, which is the confusion this workflow exists to end.
+    concurrency:
+      group: worker-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      # The secrets context is not available to a job-level `if`, so the guard
+      # is a step. Without it a repo that never set the token would show a red
+      # main on every worker commit, which is worse than not deploying.
+      - id: guard
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN is not set — skipping the worker deploy."
+            echo 'Set it under Settings → Secrets and variables → Actions to enable this.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'ok=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ok=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # The worker has no build step, so its tests are the only gate between a
+      # bad edit and a live proxy the wall depends on.
+      - if: steps.guard.outputs.ok == 'true'
+        run: npm ci
+      - if: steps.guard.outputs.ok == 'true'
+        run: npm test -- --run worker
+
+      # Pinned to a major: an unattended deploy should not pick up a breaking
+      # wrangler release on its own.
+      - id: deploy
+        if: steps.guard.outputs.ok == 'true'
+        working-directory: worker
+        # pipefail is not on in the default step shell, so without it `| tee`
+        # would report the pipeline's success and a failed deploy would look
+        # like a good one — the exact ambiguity this workflow exists to remove.
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee deploy.log
+
+      # wrangler prints the hostname it deployed to. Surfacing it here means the
+      # answer to "where did it land?" is in the run, not in someone's scrollback.
+      - if: steps.guard.outputs.ok == 'true'
+        working-directory: worker
+        run: |
+          {
+            echo '## Worker deployed'
+            echo
+            # `|| true`: no match is a reportable outcome, not a step failure,
+            # and must stay so however the shell is invoked.
+            url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 || true)
+            if [ -n "$url" ]; then
+              echo "Hostname: \`$url\`"
+              echo
+              echo 'Confirm it answers, then point the wall at it:'
+              echo
+              echo '```'
+              echo "$url/"
+              echo "#lat=64.14&lon=-21.94&r=100&api=$url/v2/lat/{lat}/lon/{lon}/dist/{nm}"
+              echo '```'
+            else
+              echo 'wrangler did not print a workers.dev hostname — see the deploy step log.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
