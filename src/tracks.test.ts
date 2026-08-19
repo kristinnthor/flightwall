@@ -14,6 +14,7 @@ function ac(hex: string, lat: number, lon: number, altitudeFt = 30000): Aircraft
     verticalRateFpm: null,
     distanceKm: 0,
     bearingDeg: 0,
+    track: null,
     lat,
     lon,
   };

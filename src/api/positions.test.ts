@@ -14,8 +14,21 @@ describe('normalizeAircraft', () => {
     expect(normalizeAircraft(AIRBORNE, CENTER)).toEqual({
       hex: '4cc2b5', callsign: 'ICE615', registration: 'TF-ICY', typeCode: 'B39M',
       altitudeFt: 34000, groundSpeedKt: 450.3, verticalRateFpm: -64,
-      distanceKm: 12.5 * 1.852, bearingDeg: 271.4, lat: 64.5, lon: -22.1,
+      distanceKm: 12.5 * 1.852, bearingDeg: 271.4, track: null, lat: 64.5, lon: -22.1,
     });
+  });
+  // track is the aircraft's own heading; bearingDeg is the bearing from home.
+  // The map view needs the former and must not substitute the latter.
+  it('carries the reported track through', () => {
+    expect(normalizeAircraft({ ...AIRBORNE, track: 88.5 }, CENTER)?.track).toBe(88.5);
+  });
+  it('leaves track null when the feed omits it', () => {
+    expect(normalizeAircraft(AIRBORNE, CENTER)?.track).toBeNull();
+  });
+  it('keeps track independent of bearingDeg', () => {
+    const a = normalizeAircraft({ ...AIRBORNE, track: 10, dir: 271.4 }, CENTER)!;
+    expect(a.track).toBe(10);
+    expect(a.bearingDeg).toBe(271.4);
   });
   it('excludes ground targets', () => {
     expect(normalizeAircraft({ ...AIRBORNE, alt_baro: 'ground' }, CENTER)).toBeNull();

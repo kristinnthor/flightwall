@@ -201,3 +201,14 @@ body.doc-mode #app {
   color: var(--red); opacity: 1;
   font-size: 20px; font-weight: 700; letter-spacing: 0.08em;
 }
+
+/* Radar map view — same fixed stage as the board, drawn on canvas. */
+.map {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  display: block;
+}
+.map[hidden] { display: none; }

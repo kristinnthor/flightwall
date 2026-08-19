@@ -8,7 +8,7 @@ function ac(hex: string, distanceKm: number): Aircraft {
   return {
     hex, callsign: hex.toUpperCase(), registration: null, typeCode: null,
     altitudeFt: 30000, groundSpeedKt: 400, verticalRateFpm: 0,
-    distanceKm, bearingDeg: 0, lat: 64, lon: -21,
+    distanceKm, bearingDeg: 0, track: null, lat: 64, lon: -21,
   };
 }
 
