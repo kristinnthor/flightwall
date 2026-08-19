@@ -55,7 +55,11 @@ describe('TrackStore.append', () => {
   it('cannot have its empty track corrupted by a caller', () => {
     const s = new TrackStore();
     const escaped = s.get('nope') as TrackPoint[];
+    expect(Object.isFrozen(escaped)).toBe(true);
+    // Array.prototype.push sets with throw semantics, so this raises in sloppy
+    // mode too — unlike a bare index assignment, which only throws under strict.
     expect(() => escaped.push({ lat: 0, lon: 0, altitudeFt: 0, t: 0 })).toThrow(TypeError);
+    expect(escaped).toHaveLength(0);
     expect(s.get('other')).toEqual([]);
     expect(s.get('nope')).toHaveLength(0);
   });
