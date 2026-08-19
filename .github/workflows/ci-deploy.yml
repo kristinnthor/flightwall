@@ -10,15 +10,17 @@ on:
 permissions:
   contents: read
 
-# Grouped per ref, so a pull request run can never cancel an in-flight deploy
-# from main. Superseded runs on the same ref still cancel each other.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+# Concurrency is per job, not workflow-wide: a workflow-level
+# cancel-in-progress cancels the whole run, deploy included, which no
+# job-level group can protect against.
 jobs:
   validate:
     runs-on: ubuntu-latest
+    # Superseded runs on the same ref cancel each other, so a busy PR does not
+    # queue up stale validations. Grouped per ref so a PR never touches main.
+    concurrency:
+      group: validate-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +39,12 @@ jobs:
     needs: validate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Never cancelled: a cancel landing inside actions/deploy-pages can leave
+    # the Pages deployment half-applied. Back-to-back merges queue and publish
+    # in order instead, so the last one still wins.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       contents: read
       pages: write

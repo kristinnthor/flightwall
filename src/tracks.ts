@@ -23,7 +23,10 @@ const DEFAULT_MAX_POINTS = 1200;
 const DEFAULT_MAX_TRACKS = 500;
 const DEFAULT_MIN_MOVE_KM = 0.05;
 
-const EMPTY: readonly TrackPoint[] = [];
+// Frozen because every get() for an unknown hex hands back this same instance:
+// `readonly` is erased at runtime, so without the freeze one caller mutating
+// the result would corrupt the empty track for every later caller.
+const EMPTY: readonly TrackPoint[] = Object.freeze([]);
 
 /**
  * In-memory history of where each aircraft has been, accumulated forward from
