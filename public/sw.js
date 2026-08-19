@@ -40,7 +40,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Hashed assets, icons, fonts: cache-first (immutable or cheap to refresh).
+  // Hashed assets, icons, fonts, coastline tiles: cache-first (immutable or
+  // cheap to refresh). The coastline tiles under ./coast/ are NOT content
+  // hashed, so bump CACHE above whenever they are regenerated.
   event.respondWith(
     caches.match(request).then(
       (hit) =>

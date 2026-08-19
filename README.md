@@ -52,6 +52,9 @@ Zero runtime dependencies. Deployed to GitHub Pages by CI on every push to main.
   [hexdb.io](https://hexdb.io) as fallback for routes, airports, and operators.
 - Photos: [planespotters.net](https://www.planespotters.net) — photos remain theirs,
   credited and linked in the UI as required.
+- Coastline & lakes: [Natural Earth](https://www.naturalearthdata.com) 1:50m physical
+  vectors, public domain. Bundled offline under `public/coast/` so the map view needs
+  no tile server; regenerate with `node scripts/build-coastline.mjs`.
 
 Routes are best-effort: they come from callsign databases, and FlightWall only shows
 a route when the aircraft's live position is plausibly on that route's corridor —
