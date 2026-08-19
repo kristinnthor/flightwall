@@ -63,7 +63,7 @@ export class Board {
 
     const footer = el('footer', 'attribution');
     footer.appendChild(el('span', undefined,
-      'DATA: AIRPLANES.LIVE · ROUTES: ADSBDB · PHOTOS: PLANESPOTTERS.NET'));
+      'DATA: AIRPLANES.LIVE · ROUTES: ADSBDB · PHOTOS: PLANESPOTTERS.NET · COAST: NATURAL EARTH'));
     this.ageEl = el('span', 'age', '');
     footer.appendChild(this.ageEl);
     this.boardEl.appendChild(footer);
