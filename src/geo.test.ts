@@ -63,4 +63,20 @@ describe('projectLocalKm', () => {
     expect(p.xKm).toBeGreaterThan(200);
     expect(p.xKm).toBeLessThan(240);
   });
+
+  // The longitude normalization keeps its dividend positive only for lon/lon0
+  // within the +/-180 that isValidConfig enforces; pin both ends of that range.
+  it('treats the two ends of the longitude range as the same meridian', () => {
+    expect(projectLocalKm(0, -180, 0, 180).xKm).toBeCloseTo(0, 9);
+    expect(projectLocalKm(0, 180, 0, -180).xKm).toBeCloseTo(0, 9);
+  });
+
+  it('stays within a half turn for every extreme longitude pair', () => {
+    const halfTurnKm = Math.PI * 6371;
+    for (const lon0 of [-180, -90, 0, 90, 180]) {
+      for (const lon of [-180, -90, 0, 90, 180]) {
+        expect(Math.abs(projectLocalKm(0, lon0, 0, lon).xKm)).toBeLessThanOrEqual(halfTurnKm + 1e-6);
+      }
+    }
+  });
 });

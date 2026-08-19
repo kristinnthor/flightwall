@@ -37,8 +37,10 @@ export function projectLocalKm(
   lon: number,
 ): { xKm: number; yKm: number } {
   // Normalize into [-180, 180) so a scope straddling the antimeridian does not
-  // project targets most of the way around the globe.
-  const dLon = ((((lon - lon0 + 180) % 360) + 360) % 360) - 180;
+  // project targets most of the way around the globe. The +540 keeps the
+  // dividend positive for any lon/lon0 pair in [-180, 180], sidestepping JS's
+  // negative-remainder behavior.
+  const dLon = ((lon - lon0 + 540) % 360) - 180;
   const meanLat = toRad((lat0 + lat) / 2);
   return {
     xKm: toRad(dLon) * R_EARTH_KM * Math.cos(meanLat),
