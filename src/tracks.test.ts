@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TrackStore } from './tracks';
+import { TrackStore, type TrackPoint } from './tracks';
 import type { Aircraft } from './types';
 
 /** Minimal airborne target; only hex/lat/lon/altitude matter to the store. */
@@ -48,6 +48,20 @@ describe('TrackStore.append', () => {
 
   it('returns an empty track for an unknown hex', () => {
     expect(new TrackStore().get('nope')).toEqual([]);
+  });
+
+  // The empty result is one shared instance, and `readonly` is erased at
+  // runtime, so it has to be frozen or one bad caller poisons every later one.
+  it('cannot have its empty track corrupted by a caller', () => {
+    const s = new TrackStore();
+    const escaped = s.get('nope') as TrackPoint[];
+    expect(Object.isFrozen(escaped)).toBe(true);
+    // Array.prototype.push sets with throw semantics, so this raises in sloppy
+    // mode too — unlike a bare index assignment, which only throws under strict.
+    expect(() => escaped.push({ lat: 0, lon: 0, altitudeFt: 0, t: 0 })).toThrow(TypeError);
+    expect(escaped).toHaveLength(0);
+    expect(s.get('other')).toEqual([]);
+    expect(s.get('nope')).toHaveLength(0);
   });
 
   it('records altitude alongside position', () => {
