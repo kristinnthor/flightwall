@@ -31,16 +31,27 @@ const WORKER_NAME = 'flightwall-proxy';
 
 /** Human-readable form of what upstreamPathFor accepts, so a rejected request
  *  can show the caller the shape it failed to match. */
-const PATH_SHAPE = '/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}';
+const PATH_SHAPE = '/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm} or /{v2|v3}/point/{lat}/{lon}/{nm}';
+
+const COORD = '(-?\\d{1,3}(?:\\.\\d+)?)';
+/** adsb.fi's own layout. */
+const LAT_LON_DIST = new RegExp(`^/(v2|v3)/lat/${COORD}/lon/${COORD}/dist/(\\d{1,3})/?$`);
+/**
+ * airplanes.live's layout, which is also what the wall builds from a bare base
+ * URL with no {lat} placeholders. Supporting it means a TV can be configured
+ * by typing `https://<host>/v2` — curly braces are buried several layers deep
+ * on a Samsung on-screen keyboard, and this is a URL entered with a remote.
+ */
+const POINT = new RegExp(`^/(v2|v3)/point/${COORD}/${COORD}/(\\d{1,3})/?$`);
 
 /**
- * Parse an incoming path into the upstream query, or null if it is not the
+ * Parse an incoming path into the upstream query, or null if it is not a
  * shape we forward. This is the security boundary: anything unrecognised is
- * rejected rather than passed through.
+ * rejected rather than passed through. Both layouts capture in the same
+ * order and resolve to the same upstream path.
  */
 export function upstreamPathFor(pathname) {
-  const m = /^\/(v2|v3)\/lat\/(-?\d{1,3}(?:\.\d+)?)\/lon\/(-?\d{1,3}(?:\.\d+)?)\/dist\/(\d{1,3})\/?$/
-    .exec(pathname);
+  const m = LAT_LON_DIST.exec(pathname) ?? POINT.exec(pathname);
   if (!m) return null;
   const [, version, lat, lon, dist] = m;
   if (Math.abs(Number(lat)) > 90 || Math.abs(Number(lon)) > 180) return null;
@@ -80,14 +91,30 @@ function corsHeaders(origin) {
  * be equivalent today, but a diagnostic that disagrees with the thing it is
  * diagnosing is worse than no diagnostic, so it reports what actually decided.
  */
-export function identity(origin, allow) {
+export function identity(origin, served) {
   return {
     worker: WORKER_NAME,
     upstream: UPSTREAM_LABEL,
     pathShape: PATH_SHAPE,
     origin: origin || null,
-    originAllowed: allow !== null,
+    originAllowed: served,
   };
+}
+
+/**
+ * Whether this caller gets data at all.
+ *
+ * The origin gate exists to stop the proxy being a CORS bypass — a browser
+ * page reading adsb.fi data the browser would otherwise deny it. A request
+ * carrying NO Origin is not that: browsers always attach Origin to a
+ * cross-origin fetch, so anything lacking one is a native client, which could
+ * call adsb.fi directly and gains nothing here. Refusing those bought no
+ * security while making the packaged TV app impossible, because a Tizen
+ * widget sends no Origin. A request that DOES carry an Origin still has to be
+ * on the list — that is the case the gate is actually for.
+ */
+export function isServed(hasOrigin, allow) {
+  return !hasOrigin || allow !== null;
 }
 
 /** Every response body is JSON carrying `worker`, so even a rejection says who
@@ -102,24 +129,27 @@ function json(body, status, headers) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const origin = request.headers.get('Origin') || '';
+    const originHeader = request.headers.get('Origin');
+    const origin = originHeader || '';
     const allow = allowedOrigin(origin, env);
+    const served = isServed(originHeader !== null, allow);
+    // CORS headers only mean anything to a caller that sent an Origin; a
+    // native client needs the data, not the permission slip.
+    const cors = allow ? corsHeaders(allow) : { 'X-Worker': WORKER_NAME, 'X-Upstream-Source': UPSTREAM_LABEL };
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      // CORS only for origins we would serve anyway; a browser navigation to
-      // this URL sends no Origin and needs none.
-      return json(identity(origin, allow), 200, allow ? corsHeaders(allow) : undefined);
+      return json(identity(origin, served), 200, cors);
     }
 
-    if (!allow) {
+    if (!served) {
       return json({ worker: WORKER_NAME, error: 'origin not allowed', origin: origin || null }, 403);
     }
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(allow) });
+      return new Response(null, { status: 204, headers: cors });
     }
     if (request.method !== 'GET') {
-      return json({ worker: WORKER_NAME, error: 'method not allowed', method: request.method }, 405, corsHeaders(allow));
+      return json({ worker: WORKER_NAME, error: 'method not allowed', method: request.method }, 405, cors);
     }
 
     const path = upstreamPathFor(url.pathname);
@@ -129,7 +159,7 @@ export default {
       return json(
         { worker: WORKER_NAME, error: 'unsupported path', path: url.pathname, pathShape: PATH_SHAPE },
         404,
-        corsHeaders(allow),
+        cors,
       );
     }
 
@@ -148,7 +178,7 @@ export default {
     }
 
     const out = new Response(upstream.body, upstream);
-    for (const [k, v] of Object.entries(corsHeaders(allow))) out.headers.set(k, v);
+    for (const [k, v] of Object.entries(cors)) out.headers.set(k, v);
     return out;
   },
 };

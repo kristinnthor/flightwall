@@ -15,6 +15,7 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       <label>RADIUS KM (1–460) <input name="r" type="text" inputmode="decimal" maxlength="4"></label>
       <label>TRAIL MINUTES (0–180) <input name="t" type="text" inputmode="decimal" maxlength="3"></label>
       <label>LABEL <input name="label" type="text" maxlength="24"></label>
+      <label>API URL (blank = default feeds) <input name="api" type="text" maxlength="200"></label>
       <button type="button" class="geo-btn">USE MY LOCATION</button>
       <div class="share-url"></div>
       <div class="settings-actions">
@@ -34,6 +35,7 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   input('r').value = initial.radiusKm !== undefined ? String(initial.radiusKm) : '';
   input('t').value = initial.trailMinutes !== undefined ? String(initial.trailMinutes) : '';
   input('label').value = initial.label ?? '';
+  input('api').value = initial.apiBase ?? '';
   const shareEl = root.querySelector<HTMLElement>('.share-url')!;
 
   // Comma decimals are normal on Icelandic (and most European) keyboards.
@@ -49,8 +51,11 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       radiusKm: num('r'),
     };
     if (input('label').value) cfg.label = input('label').value;
-    // Not an input, but must survive a round trip through this form.
-    if (initial.apiBase) cfg.apiBase = initial.apiBase;
+    // The packaged TV app has no address bar, so this is the only way to point
+    // it at a CORS proxy — without it the wall on a TV can only reach feeds
+    // that refuse browsers, and sits on NO SIGNAL for ever.
+    const api = input('api').value.trim();
+    if (api) cfg.apiBase = api;
     // Blank means "unset", which loads the default — not an invalid config.
     if (input('t').value.trim() !== '') cfg.trailMinutes = num('t');
     return isValidConfig(cfg) ? cfg : null;
