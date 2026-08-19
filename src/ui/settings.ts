@@ -49,6 +49,8 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       radiusKm: num('r'),
     };
     if (input('label').value) cfg.label = input('label').value;
+    // Not an input, but must survive a round trip through this form.
+    if (initial.apiBase) cfg.apiBase = initial.apiBase;
     // Blank means "unset", which loads the default — not an invalid config.
     if (input('t').value.trim() !== '') cfg.trailMinutes = num('t');
     return isValidConfig(cfg) ? cfg : null;

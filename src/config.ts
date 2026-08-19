@@ -31,6 +31,8 @@ export function isValidConfig(c: unknown): c is Config {
     (o.label === undefined || typeof o.label === 'string') &&
     // Optional: a config saved before the map view existed has no trailMinutes
     // and must keep loading straight to the board.
+    (o.apiBase === undefined ||
+      (typeof o.apiBase === 'string' && /^https:\/\/[^\s]+$/.test(o.apiBase))) &&
     (o.trailMinutes === undefined ||
       (typeof o.trailMinutes === 'number' && Number.isFinite(o.trailMinutes) &&
         o.trailMinutes >= 0 && o.trailMinutes <= MAX_TRAIL_MINUTES))
@@ -62,6 +64,8 @@ export function parseHash(hash: string): Config | null {
   if (label) cfg.label = label;
   const trailMinutes = numParam(params, 't');
   if (trailMinutes !== undefined) cfg.trailMinutes = trailMinutes;
+  const apiBase = params.get('api');
+  if (apiBase) cfg.apiBase = apiBase.trim().replace(/\/+$/, '');
   return isValidConfig(cfg) ? cfg : null;
 }
 
@@ -72,6 +76,7 @@ export function serializeToHash(cfg: Config): string {
   params.set('r', String(cfg.radiusKm));
   if (cfg.label) params.set('label', cfg.label);
   if (cfg.trailMinutes !== undefined) params.set('t', String(cfg.trailMinutes));
+  if (cfg.apiBase) params.set('api', cfg.apiBase);
   return `#${params.toString()}`;
 }
 

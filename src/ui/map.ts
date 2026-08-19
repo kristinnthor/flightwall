@@ -6,6 +6,7 @@ import { computeStatus } from '../state';
 import { initialBearingDeg } from '../geo';
 import { formatAlt, formatAgeSeconds } from '../format';
 import { makeProjector, ringRadiiKm, placeLabels, type Projector } from './mapproject';
+import { attributionFor } from './board';
 import { STAGE_W, STAGE_H } from '../stage';
 
 // Mirrors the custom properties in styles.css — canvas cannot read them.
@@ -112,6 +113,7 @@ export class MapView {
   private lastSnap: Snapshot | null = null;
   private lastTracks: ReadonlyMap<string, readonly TrackPoint[]> = new Map();
   private lastNow = 0;
+  private source = 'AIRPLANES.LIVE';
   private hasDrawn = false;
 
   constructor(
@@ -150,6 +152,10 @@ export class MapView {
         }
       });
     }
+  }
+
+  setSource(label: string): void {
+    this.source = label;
   }
 
   setVisible(visible: boolean): void {
@@ -356,10 +362,6 @@ export class MapView {
     ctx.fillStyle = COLOR_DIM;
 
     ctx.font = `14px ${FONT}`;
-    ctx.fillText(
-      'DATA: AIRPLANES.LIVE · ROUTES: ADSBDB · PHOTOS: PLANESPOTTERS.NET · COAST: NATURAL EARTH',
-      48,
-      STAGE_H - 28,
-    );
+    ctx.fillText(attributionFor(this.source), 48, STAGE_H - 28);
   }
 }

@@ -6,6 +6,9 @@ export interface Config {
   /** Minutes of flight path drawn on the map. 0 shows positions with no trail.
    *  Optional so configs saved before the map view existed stay valid. */
   trailMinutes?: number;
+  /** Pin the aircraft feed to one base URL instead of trying the built-in
+   *  list. Set it to test a source; leave unset for automatic failover. */
+  apiBase?: string;
 }
 
 /** Normalized airborne aircraft (ground/positionless targets are filtered out upstream). */
