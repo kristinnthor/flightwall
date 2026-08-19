@@ -61,7 +61,12 @@ jobs:
       - id: deploy
         if: steps.guard.outputs.ok == 'true'
         working-directory: worker
-        run: npx --yes wrangler@4 deploy 2>&1 | tee deploy.log
+        # pipefail is not on in the default step shell, so without it `| tee`
+        # would report the pipeline's success and a failed deploy would look
+        # like a good one — the exact ambiguity this workflow exists to remove.
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee deploy.log
 
       # wrangler prints the hostname it deployed to. Surfacing it here means the
       # answer to "where did it land?" is in the run, not in someone's scrollback.
@@ -71,7 +76,9 @@ jobs:
           {
             echo '## Worker deployed'
             echo
-            url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+            # `|| true`: no match is a reportable outcome, not a step failure,
+            # and must stay so however the shell is invoked.
+            url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 || true)
             if [ -n "$url" ]; then
               echo "Hostname: \`$url\`"
               echo
