@@ -4,6 +4,10 @@ import { climbArrow, compass16, formatAgeSeconds, formatAlt, formatDistanceKm } 
 
 const MAX_ROWS = 12;
 
+export function attributionFor(source: string): string {
+  return `DATA: ${source} · ROUTES: ADSBDB · PHOTOS: PLANESPOTTERS.NET · COAST: NATURAL EARTH`;
+}
+
 /** Per-aircraft display extras, keyed by hex: plausibility-checked route plus
  *  registered-operator fallback for the AIRLINE column. */
 export interface RowExtras {
@@ -28,6 +32,7 @@ export class Board {
   private clockEl: HTMLElement;
   private ageEl: HTMLElement;
   private spotlightEl: HTMLElement;
+  private sourceEl: HTMLElement;
   private rowNodes = new Map<string, HTMLElement>();
   private exitingNodes = new Map<string, { node: HTMLElement; timer: ReturnType<typeof setTimeout> }>();
 
@@ -62,13 +67,19 @@ export class Board {
     this.boardEl.appendChild(this.spotlightEl);
 
     const footer = el('footer', 'attribution');
-    footer.appendChild(el('span', undefined,
-      'DATA: AIRPLANES.LIVE · ROUTES: ADSBDB · PHOTOS: PLANESPOTTERS.NET · COAST: NATURAL EARTH'));
+    this.sourceEl = el('span', undefined, attributionFor('AIRPLANES.LIVE'));
+    footer.appendChild(this.sourceEl);
     this.ageEl = el('span', 'age', '');
     footer.appendChild(this.ageEl);
     this.boardEl.appendChild(footer);
 
     root.appendChild(this.boardEl);
+  }
+
+  /** Credit the feed actually serving data — attribution is a terms
+   *  requirement, so it must follow failover rather than stay hardcoded. */
+  setSource(label: string): void {
+    this.sourceEl.textContent = attributionFor(label);
   }
 
   /** Toggled against the map view; both stay constructed so neither loses state. */

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { normalizeAircraft, buildPointUrl, AirplanesLiveProvider } from './positions';
+import {
+  normalizeAircraft, buildPointUrl, AirplanesLiveProvider,
+  FailoverProvider, DEFAULT_API_BASES, sourceLabel,
+} from './positions';
+import type { Aircraft } from '../types';
 
 const CENTER = { lat: 64.13, lon: -21.94 };
 
@@ -97,3 +101,95 @@ describe('AirplanesLiveProvider', () => {
     await expect(new AirplanesLiveProvider('https://x/v2').fetchAircraft(0, 0, 10)).resolves.toEqual([]);
   });
 });
+
+describe('sourceLabel', () => {
+  it('names the host, without the api prefix', () => {
+    expect(sourceLabel('https://api.airplanes.live/v2')).toBe('AIRPLANES.LIVE');
+    expect(sourceLabel('https://api.adsb.fi/v2')).toBe('ADSB.FI');
+    expect(sourceLabel('https://adsb.one/v2')).toBe('ADSB.ONE');
+  });
+});
+
+// airplanes.live began answering browser requests with a CORS-less 403, which
+// took the whole wall down. One hardcoded source is a single point of failure.
+describe('FailoverProvider', () => {
+  const one = (hex: string): Aircraft => ({
+    hex, callsign: null, registration: null, typeCode: null, altitudeFt: 30000,
+    groundSpeedKt: null, verticalRateFpm: null, distanceKm: 1, bearingDeg: 0,
+    track: null, lat: 64, lon: -21,
+  });
+
+  /** Fake provider factory: each base either answers or throws, and every call
+   *  is recorded so ordering and stickiness are observable. */
+  function fake(behaviour: Record<string, 'ok' | 'fail'>) {
+    const calls: string[] = [];
+    const make = (base: string) => ({
+      fetchAircraft: async () => {
+        calls.push(base);
+        if (behaviour[base] === 'ok') return [one(base)];
+        throw new Error(`${base} refused`);
+      },
+    });
+    return { make, calls };
+  }
+
+  const A = 'https://a/v2', B = 'https://b/v2', C = 'https://c/v2';
+
+  it('uses the first source when it works, and tries no others', async () => {
+    const { make, calls } = fake({ [A]: 'ok', [B]: 'ok', [C]: 'ok' });
+    const p = new FailoverProvider([A, B, C], make);
+    expect(await p.fetchAircraft(64, -21, 50)).toHaveLength(1);
+    expect(calls).toEqual([A]);
+    expect(p.activeBase).toBe(A);
+  });
+
+  it('falls through to the next source when the first refuses', async () => {
+    const { make, calls } = fake({ [A]: 'fail', [B]: 'ok', [C]: 'ok' });
+    const p = new FailoverProvider([A, B, C], make);
+    const list = await p.fetchAircraft(64, -21, 50);
+    expect(list[0]!.hex).toBe(B);
+    expect(calls).toEqual([A, B]);
+  });
+
+  it('sticks to the working source instead of retrying the dead one', async () => {
+    const { make, calls } = fake({ [A]: 'fail', [B]: 'ok', [C]: 'ok' });
+    const p = new FailoverProvider([A, B, C], make);
+    await p.fetchAircraft(64, -21, 50);
+    calls.length = 0;
+    await p.fetchAircraft(64, -21, 50);
+    expect(calls).toEqual([B]); // A is not retried on every poll
+    expect(p.activeBase).toBe(B);
+  });
+
+  it('wraps around to earlier sources when the active one dies', async () => {
+    const behaviour: Record<string, 'ok' | 'fail'> = { [A]: 'fail', [B]: 'ok', [C]: 'fail' };
+    const { make } = fake(behaviour);
+    const p = new FailoverProvider([A, B, C], make);
+    await p.fetchAircraft(64, -21, 50);
+    expect(p.activeBase).toBe(B);
+    behaviour[B] = 'fail';
+    behaviour[A] = 'ok';
+    const list = await p.fetchAircraft(64, -21, 50);
+    expect(list[0]!.hex).toBe(A);
+    expect(p.activeBase).toBe(A);
+  });
+
+  // PollLoop's backoff and the board's stale/lost states depend on this.
+  it('throws when every source fails', async () => {
+    const { make, calls } = fake({ [A]: 'fail', [B]: 'fail', [C]: 'fail' });
+    const p = new FailoverProvider([A, B, C], make);
+    await expect(p.fetchAircraft(64, -21, 50)).rejects.toThrow(/refused/);
+    expect(calls).toEqual([A, B, C]);
+  });
+
+  it('rejects an empty source list rather than failing silently later', () => {
+    expect(() => new FailoverProvider([])).toThrow();
+  });
+
+  it('ships airplanes.live first, with alternates behind it', () => {
+    expect(DEFAULT_API_BASES[0]).toContain('airplanes.live');
+    expect(DEFAULT_API_BASES.length).toBeGreaterThan(1);
+    for (const b of DEFAULT_API_BASES) expect(b.startsWith('https://')).toBe(true);
+  });
+});
+

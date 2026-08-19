@@ -167,3 +167,18 @@ describe('trail minutes field', () => {
   });
 });
 
+describe('apiBase passthrough', () => {
+  // There is no input for it, so without an explicit carry-over the settings
+  // form would silently drop a pinned source from the share link.
+  it('keeps a pinned source in the generated link', () => {
+    const root = document.createElement('div');
+    renderSettings(
+      root,
+      { lat: 64, lon: -21, radiusKm: 50, apiBase: 'https://api.adsb.fi/v2' },
+      'https://x/',
+    );
+    const url = root.querySelector<HTMLElement>('.share-url')!.textContent!;
+    expect(new URLSearchParams(url.split('#')[1]).get('api')).toBe('https://api.adsb.fi/v2');
+  });
+});
+

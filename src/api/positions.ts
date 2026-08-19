@@ -95,3 +95,60 @@ export class AirplanesLiveProvider implements AircraftProvider {
     }
   }
 }
+
+/**
+ * Feeds sharing the ADSBExchange-v2 response shape (`{ ac: [...] }`), tried in
+ * order. airplanes.live stays first — it is the source this wall was built
+ * against — but it began refusing browser requests with a CORS-less 403, so a
+ * single hardcoded source is a single point of failure.
+ */
+export const DEFAULT_API_BASES = [
+  'https://api.airplanes.live/v2',
+  'https://api.adsb.fi/v2',
+  'https://api.adsb.one/v2',
+];
+
+/** Host of a base URL, upper-cased for the attribution line. */
+export function sourceLabel(base: string): string {
+  const m = /^https:\/\/([^/]+)/.exec(base);
+  return (m ? m[1]! : base).replace(/^api\./, '').toUpperCase();
+}
+
+/**
+ * Tries each base URL in turn and sticks to the first that answers, so a source
+ * going away costs one failed request rather than the whole wall. Re-probes
+ * from the top once the current one starts failing.
+ *
+ * Throws when every source fails, so PollLoop's backoff and the board's
+ * stale/lost states still behave exactly as before.
+ */
+export class FailoverProvider implements AircraftProvider {
+  private active = 0;
+
+  constructor(
+    private bases: string[] = DEFAULT_API_BASES,
+    private make: (base: string) => AircraftProvider = (base) => new AirplanesLiveProvider(base),
+  ) {
+    if (bases.length === 0) throw new Error('FailoverProvider needs at least one base URL');
+  }
+
+  /** Base URL currently serving data — drives the attribution line. */
+  get activeBase(): string {
+    return this.bases[this.active]!;
+  }
+
+  async fetchAircraft(lat: number, lon: number, radiusKm: number): Promise<Aircraft[]> {
+    let lastError: unknown = new Error('no sources tried');
+    for (let i = 0; i < this.bases.length; i++) {
+      const index = (this.active + i) % this.bases.length;
+      try {
+        const list = await this.make(this.bases[index]!).fetchAircraft(lat, lon, radiusKm);
+        this.active = index; // stick to whatever answered
+        return list;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError;
+  }
+}

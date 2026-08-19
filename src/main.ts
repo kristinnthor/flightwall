@@ -1,7 +1,7 @@
 import './styles.css';
 import { loadConfig, trailWindowMs, VIEW_KEY } from './config';
 import { computeStageTransform } from './stage';
-import { AirplanesLiveProvider } from './api/positions';
+import { FailoverProvider, DEFAULT_API_BASES, sourceLabel } from './api/positions';
 import { AdsbdbRoutes } from './api/routes';
 import { HexdbRoutes, HexdbAirports } from './api/hexdb';
 import { AircraftInfo } from './api/aircraft';
@@ -263,8 +263,21 @@ if (!config) {
     });
   }
 
+  // An explicit api= pins the feed to exactly that source, so testing one
+  // cannot be masked by silently falling through to another.
+  const provider = new FailoverProvider(config.apiBase ? [config.apiBase] : DEFAULT_API_BASES);
+  let shownSource = '';
+  function syncSource(): void {
+    const label = sourceLabel(provider.activeBase);
+    if (label === shownSource) return;
+    shownSource = label;
+    board.setSource(label);
+    mapView.setSource(label);
+  }
+  syncSource();
+
   const loop = new PollLoop({
-    provider: new AirplanesLiveProvider(),
+    provider,
     config,
     isHidden: () => document.hidden,
     onUpdate: (snap) => {
@@ -273,6 +286,7 @@ if (!config) {
       updateSpotlight(snap);
       // Stamped with the poll's own success time rather than the wall clock:
       // that is when these positions were true.
+      syncSource();
       tracks.append(snap.aircraft, snap.lastSuccessAt);
       tracks.prune(snap.lastSuccessAt, TRAIL_WINDOW_MS);
       paintMap();

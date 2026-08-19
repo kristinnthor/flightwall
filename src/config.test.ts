@@ -159,3 +159,35 @@ describe('blank and whitespace hash parameters', () => {
   });
 });
 
+describe('apiBase override', () => {
+  const base = '#lat=64&lon=-21&r=50';
+
+  it('reads api from the hash and strips a trailing slash', () => {
+    expect(parseHash(`${base}&api=https%3A%2F%2Fapi.adsb.fi%2Fv2`)?.apiBase)
+      .toBe('https://api.adsb.fi/v2');
+    expect(parseHash(`${base}&api=https%3A%2F%2Fapi.adsb.fi%2Fv2%2F`)?.apiBase)
+      .toBe('https://api.adsb.fi/v2');
+  });
+
+  it('is optional — configs without it stay valid and use the default list', () => {
+    expect(parseHash(base)?.apiBase).toBeUndefined();
+    expect(isValidConfig({ lat: 64, lon: -21, radiusKm: 50 })).toBe(true);
+  });
+
+  // Mixed content would be blocked on the https-only Pages deployment anyway.
+  it('rejects a non-https source', () => {
+    expect(parseHash(`${base}&api=http%3A%2F%2Fapi.adsb.fi%2Fv2`)).toBeNull();
+    expect(parseHash(`${base}&api=ftp%3A%2F%2Fnope`)).toBeNull();
+  });
+
+  it('round-trips through serializeToHash', () => {
+    const cfg = { lat: 64, lon: -21, radiusKm: 50, apiBase: 'https://api.adsb.fi/v2' };
+    expect(parseHash(serializeToHash(cfg))).toEqual(cfg);
+  });
+
+  it('omits api from the hash when unset', () => {
+    const hash = serializeToHash({ lat: 64, lon: -21, radiusKm: 50 });
+    expect(new URLSearchParams(hash.slice(1)).has('api')).toBe(false);
+  });
+});
+
