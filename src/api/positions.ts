@@ -12,6 +12,7 @@ export interface RawV2Aircraft {
   alt_baro?: number | 'ground';
   alt_geom?: number;
   gs?: number;
+  track?: number; // true track over ground
   baro_rate?: number;
   lat?: number;
   lon?: number;
@@ -56,6 +57,7 @@ export function normalizeAircraft(
     verticalRateFpm: typeof raw.baro_rate === 'number' ? raw.baro_rate : null,
     distanceKm,
     bearingDeg,
+    track: typeof raw.track === 'number' ? raw.track : null,
     lat: raw.lat,
     lon: raw.lon,
   };

@@ -9,7 +9,7 @@ function ac(hex: string, distanceKm: number, over: Partial<Aircraft> = {}): Airc
   return {
     hex, callsign: `CS${hex.toUpperCase()}`, registration: 'TF-XXX', typeCode: 'B39M',
     altitudeFt: 34000, groundSpeedKt: 450, verticalRateFpm: 1200,
-    distanceKm, bearingDeg: 315, lat: 64, lon: -21, ...over,
+    distanceKm, bearingDeg: 315, track: null, lat: 64, lon: -21, ...over,
   };
 }
 

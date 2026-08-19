@@ -15,7 +15,10 @@ export interface Aircraft {
   groundSpeedKt: number | null;
   verticalRateFpm: number | null;
   distanceKm: number;
+  /** Bearing from the home point to the aircraft — NOT the aircraft's heading. */
   bearingDeg: number;
+  /** True track over ground in degrees, when the feed reports it. */
+  track: number | null;
   lat: number;
   lon: number;
 }
