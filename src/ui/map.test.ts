@@ -174,7 +174,7 @@ describe('viewBounds', () => {
 describe('MapView', () => {
   it('survives a browser with no 2D context and draws nothing', () => {
     const view = new MapView(root(), CFG, undefined, { context: null });
-    expect(() => view.update(snap([ac('a')]), new Map())).not.toThrow();
+    expect(() => view.update(snap([ac('a')]), new Map(), 1000)).not.toThrow();
   });
 
   it('appends a fixed 1920x1080 canvas to the stage', () => {
@@ -187,7 +187,7 @@ describe('MapView', () => {
 
   it('draws rings and the home marker even with an empty sky', () => {
     const ctx = stubContext();
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), new Map(), 1000);
     expect(opsOf(ctx, 'arc').length).toBeGreaterThanOrEqual(3); // ring set
     expect(textsOf(ctx)).toContain('N');
     expect(textsOf(ctx)).toContain('100 KM'); // outer ring is the config radius
@@ -197,11 +197,11 @@ describe('MapView', () => {
   it('rotates an aircraft with a known heading and does not rotate one without', () => {
     const ctx = stubContext();
     const view = new MapView(root(), CFG, undefined, { context: ctx });
-    view.update(snap([ac('a', { track: 90 })]), new Map());
+    view.update(snap([ac('a', { track: 90 })]), new Map(), 1000);
     expect(opsOf(ctx, 'rotate')).toHaveLength(1);
 
     const ctx2 = stubContext();
-    new MapView(root(), CFG, undefined, { context: ctx2 }).update(snap([ac('b')]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx2 }).update(snap([ac('b')]), new Map(), 1000);
     expect(opsOf(ctx2, 'rotate')).toHaveLength(0);
   });
 
@@ -210,7 +210,7 @@ describe('MapView', () => {
     const tracks = new Map<string, readonly TrackPoint[]>([
       ['a', [pt(64, -21, 0), pt(64.05, -21, 1), pt(64.1, -21, 2)]],
     ]);
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks);
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks, 1000);
     // 3 points => 2 segments => at least 2 lineTo across the bands.
     expect(opsOf(ctx, 'lineTo').length).toBeGreaterThanOrEqual(2);
     const alphas = opsOf(ctx, 'globalAlpha').map((c) => c.args[0] as number);
@@ -220,13 +220,13 @@ describe('MapView', () => {
   it('draws an aircraft with a single trail point but no trail line', () => {
     const ctx = stubContext();
     const tracks = new Map<string, readonly TrackPoint[]>([['a', [pt(64.1, -21, 0)]]]);
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks);
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks, 1000);
     expect(textsOf(ctx).some((t) => t.startsWith('CSA'))).toBe(true);
   });
 
   it('labels an aircraft with callsign and altitude', () => {
     const ctx = stubContext();
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), new Map(), 1000);
     expect(textsOf(ctx).some((t) => t.includes('CSA'))).toBe(true);
   });
 
@@ -235,7 +235,7 @@ describe('MapView', () => {
     // Same position, so the boxes collide; nearest-first order decides.
     const near = ac('near', { distanceKm: 1, lat: 64.1, lon: -21 });
     const far = ac('far', { distanceKm: 90, lat: 64.1, lon: -21 });
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([near, far]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([near, far]), new Map(), 1000);
     const texts = textsOf(ctx);
     expect(texts.some((t) => t.includes('CSNEAR'))).toBe(true);
     expect(texts.some((t) => t.includes('CSFAR'))).toBe(false);
@@ -245,7 +245,7 @@ describe('MapView', () => {
     const ctx = stubContext();
     const a = ac('a', { lat: 64.4, lon: -21 });
     const b = ac('b', { lat: 63.6, lon: -21 });
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([a, b]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([a, b]), new Map(), 1000);
     const texts = textsOf(ctx);
     expect(texts.some((t) => t.includes('CSA'))).toBe(true);
     expect(texts.some((t) => t.includes('CSB'))).toBe(true);
@@ -254,22 +254,22 @@ describe('MapView', () => {
   it('falls back to the hex when an aircraft has no callsign', () => {
     const ctx = stubContext();
     const a = ac('abc123', { callsign: null });
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([a]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([a]), new Map(), 1000);
     expect(textsOf(ctx).some((t) => t.includes('ABC123'))).toBe(true);
   });
 
   it('shows the configured label, radius and aircraft count', () => {
     const ctx = stubContext();
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), new Map(), 1000);
     const texts = textsOf(ctx);
     expect(texts).toContain('OVERHEAD · HOME');
     expect(texts).toContain('WITHIN 100 KM');
-    expect(texts).toContain('1 AIRCRAFT');
+    expect(texts.some((t) => t.startsWith('1 AIRCRAFT'))).toBe(true);
   });
 
   it('credits every data source in the footer', () => {
     const ctx = stubContext();
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), new Map());
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), new Map(), 1000);
     const footer = textsOf(ctx).find((t) => t.includes('AIRPLANES.LIVE'))!;
     expect(footer).toContain('NATURAL EARTH');
     expect(footer).toContain('ADSBDB');
@@ -290,7 +290,7 @@ describe('MapView', () => {
     const tracks = new Map<string, readonly TrackPoint[]>([
       ['gone', [pt(64, -21, 0), pt(64.1, -21, 1)]],
     ]);
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), tracks);
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([]), tracks, 1000);
     expect(opsOf(ctx, 'lineTo').length).toBeGreaterThan(0);
   });
 
@@ -299,7 +299,7 @@ describe('MapView', () => {
     const tracks = new Map<string, readonly TrackPoint[]>([
       ['a', [pt(64, -21, 0), pt(64.1, -21, 1)]],
     ]);
-    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks);
+    new MapView(root(), CFG, undefined, { context: ctx }).update(snap([ac('a')]), tracks, 1000);
     expect(ctx.calls.some((c) => c.op === 'roundRect')).toBe(false);
   });
 });
@@ -320,7 +320,7 @@ describe('MapView coastline arrival', () => {
     const { store, release } = deferredCoast([[-22, 64, -21, 64.5, -20, 64.2]]);
     const view = new MapView(root(), CFG, store, { context: ctx });
 
-    view.update(snap([ac('a')]), new Map());
+    view.update(snap([ac('a')]), new Map(), 1000);
     const framesBefore = opsOf(ctx, 'clearRect').length;
     expect(framesBefore).toBe(1);
 
@@ -346,10 +346,97 @@ describe('MapView coastline arrival', () => {
     const ctx = stubContext();
     const { store, release } = deferredCoast([]);
     const view = new MapView(root(), CFG, store, { context: ctx });
-    view.update(snap([ac('a')]), new Map());
+    view.update(snap([ac('a')]), new Map(), 1000);
     release();
     await new Promise((r) => setTimeout(r, 0));
     expect(opsOf(ctx, 'clearRect')).toHaveLength(1);
+  });
+});
+
+// The bug this suite exists to prevent: with the feed failing, every path that
+// painted the map was gated on a successful poll, so the canvas stayed entirely
+// blank — indistinguishable from an empty sky, and impossible to diagnose.
+describe('MapView without data', () => {
+  it('draws the full scope with no snapshot at all', () => {
+    const ctx = stubContext();
+    new MapView(root(), CFG, undefined, { context: ctx }).update(null, new Map(), 1000);
+    expect(opsOf(ctx, 'arc').length).toBeGreaterThanOrEqual(3); // rings
+    expect(textsOf(ctx)).toContain('N');
+    expect(textsOf(ctx)).toContain('100 KM');
+    expect(textsOf(ctx)).toContain('OVERHEAD · HOME');
+    expect(opsOf(ctx, 'stroke').length).toBeGreaterThan(0);
+    expect(opsOf(ctx, 'clearRect')).toHaveLength(1);
+  });
+
+  it('says NO SIGNAL rather than reporting zero aircraft', () => {
+    const ctx = stubContext();
+    new MapView(root(), CFG, undefined, { context: ctx }).update(null, new Map(), 1000);
+    const texts = textsOf(ctx);
+    expect(texts.some((t) => t.includes('NO SIGNAL'))).toBe(true);
+    expect(texts.some((t) => t.includes('AIRCRAFT'))).toBe(false);
+  });
+
+  it('does not throw drawing trails with no snapshot', () => {
+    const ctx = stubContext();
+    const tracks = new Map<string, readonly TrackPoint[]>([
+      ['gone', [pt(64, -21, 0), pt(64.1, -21, 1)]],
+    ]);
+    const view = new MapView(root(), CFG, undefined, { context: ctx });
+    expect(() => view.update(null, tracks, 1000)).not.toThrow();
+    expect(opsOf(ctx, 'lineTo').length).toBeGreaterThan(0);
+  });
+
+  it('repaints when the coastline lands even before any snapshot', async () => {
+    const ctx = stubContext();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const store = {
+      load: () => gate.then(() => [{ lines: [[-22, 64, -21, 64.5, -20, 64.2]] }]),
+    } as unknown as import('../coast').CoastlineStore;
+
+    const view = new MapView(root(), CFG, store, { context: ctx });
+    view.update(null, new Map(), 1000);
+    expect(opsOf(ctx, 'clearRect')).toHaveLength(1);
+
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(opsOf(ctx, 'clearRect')).toHaveLength(2);
+    expect(opsOf(ctx, 'clip').length).toBeGreaterThan(0);
+  });
+});
+
+describe('MapView feed status', () => {
+  const at = (ageMs: number) => {
+    const ctx = stubContext();
+    new MapView(root(), CFG, undefined, { context: ctx })
+      .update(snap([ac('a')]), new Map(), 1000 + ageMs);
+    return textsOf(ctx).find((t) => t.includes('AIRCRAFT'))!;
+  };
+
+  it('reports LIVE while the feed is fresh', () => {
+    expect(at(1_000)).toContain('LIVE');
+    expect(at(1_000)).toContain('1 AIRCRAFT');
+  });
+
+  it('reports STALE with an age once the feed lags', () => {
+    const line = at(20_000); // past STALE_MS (15s), before LOST_MS (60s)
+    expect(line).toContain('STALE');
+    expect(line).toContain('+20s');
+  });
+
+  it('reports LOST once the feed has been silent too long', () => {
+    expect(at(120_000)).toContain('LOST');
+  });
+
+  // An empty sky and a dead feed must not look identical.
+  it('distinguishes an empty sky from a dead feed', () => {
+    const live = stubContext();
+    new MapView(root(), CFG, undefined, { context: live }).update(snap([]), new Map(), 1000);
+    expect(textsOf(live).some((t) => t.includes('0 AIRCRAFT · LIVE'))).toBe(true);
+
+    const dead = stubContext();
+    new MapView(root(), CFG, undefined, { context: dead }).update(null, new Map(), 1000);
+    expect(textsOf(dead).some((t) => t.includes('NO SIGNAL'))).toBe(true);
   });
 });
 
