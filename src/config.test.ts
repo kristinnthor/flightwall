@@ -185,6 +185,16 @@ describe('apiBase override', () => {
     expect(parseHash(serializeToHash(cfg))).toEqual(cfg);
   });
 
+  // Feeds do not share one URL layout, so a pinned source must be able to
+  // carry placeholders through the hash intact.
+  it('round-trips a templated source with placeholders', () => {
+    const cfg = {
+      lat: 64, lon: -21, radiusKm: 50,
+      apiBase: 'https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}',
+    };
+    expect(parseHash(serializeToHash(cfg))).toEqual(cfg);
+  });
+
   it('omits api from the hash when unset', () => {
     const hash = serializeToHash({ lat: 64, lon: -21, radiusKm: 50 });
     expect(new URLSearchParams(hash.slice(1)).has('api')).toBe(false);

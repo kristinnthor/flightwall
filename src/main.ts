@@ -1,7 +1,7 @@
 import './styles.css';
 import { loadConfig, trailWindowMs, VIEW_KEY } from './config';
 import { computeStageTransform } from './stage';
-import { FailoverProvider, DEFAULT_API_BASES, sourceLabel } from './api/positions';
+import { FailoverProvider, DEFAULT_API_BASES } from './api/positions';
 import { AdsbdbRoutes } from './api/routes';
 import { HexdbRoutes, HexdbAirports } from './api/hexdb';
 import { AircraftInfo } from './api/aircraft';
@@ -268,7 +268,7 @@ if (!config) {
   const provider = new FailoverProvider(config.apiBase ? [config.apiBase] : DEFAULT_API_BASES);
   let shownSource = '';
   function syncSource(): void {
-    const label = sourceLabel(provider.activeBase);
+    const label = provider.activeLabel;
     if (label === shownSource) return;
     shownSource = label;
     board.setSource(label);
