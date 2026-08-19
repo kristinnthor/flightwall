@@ -11,7 +11,8 @@
 //
 //   npx wrangler deploy            # from worker/
 //
-// Then point the wall at it:
+// Then confirm it is live by opening the deployed host in a browser: GET /
+// answers with a JSON identity card. Finally point the wall at it:
 //   #...&api=https://<worker-host>/v2/lat/{lat}/lon/{lon}/dist/{nm}
 
 const UPSTREAM = 'https://opendata.adsb.fi/api';
@@ -22,6 +23,15 @@ const UPSTREAM_LABEL = 'ADSB.FI';
 /** Short enough to stay fresh at a 5 s poll, long enough that several viewers
  *  behind one proxy cannot breach adsb.fi's 1 request/second limit. */
 const CACHE_SECONDS = 4;
+
+/** Stamped into every response this Worker produces, including the failures.
+ *  Cloudflare's own "no Worker on this hostname" 404 carries no such marker,
+ *  so its presence is what tells you the deploy actually landed. */
+const WORKER_NAME = 'flightwall-proxy';
+
+/** Human-readable form of what upstreamPathFor accepts, so a rejected request
+ *  can show the caller the shape it failed to match. */
+const PATH_SHAPE = '/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}';
 
 /**
  * Parse an incoming path into the upstream query, or null if it is not the
@@ -51,27 +61,77 @@ function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Expose-Headers': 'X-Upstream-Source',
+    'Access-Control-Expose-Headers': 'X-Upstream-Source, X-Worker',
     'X-Upstream-Source': UPSTREAM_LABEL,
+    'X-Worker': WORKER_NAME,
     'Vary': 'Origin',
   };
 }
 
+/**
+ * What GET / reports. Deliberately answered before the origin check: the first
+ * question after a deploy is "did this land at all?", and a proxy that refuses
+ * every request without an allowed Origin cannot answer it — a browser visit,
+ * which sends no Origin, is indistinguishable from a missing deploy. Nothing
+ * here is privileged: it names the fixed upstream and tells callers only
+ * whether their own origin is accepted, which one request would reveal anyway.
+ *
+ * Takes the gate's own verdict rather than re-deriving it. Re-deriving would
+ * be equivalent today, but a diagnostic that disagrees with the thing it is
+ * diagnosing is worse than no diagnostic, so it reports what actually decided.
+ */
+export function identity(origin, allow) {
+  return {
+    worker: WORKER_NAME,
+    upstream: UPSTREAM_LABEL,
+    pathShape: PATH_SHAPE,
+    origin: origin || null,
+    originAllowed: allow !== null,
+  };
+}
+
+/** Every response body is JSON carrying `worker`, so even a rejection says who
+ *  rejected it. Header-only clients can read X-Worker instead. */
+function json(body, status, headers) {
+  return new Response(`${JSON.stringify(body, null, 2)}\n`, {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Worker': WORKER_NAME, ...headers },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
     const allow = allowedOrigin(origin, env);
-    if (!allow) return new Response('origin not allowed\n', { status: 403 });
+
+    if (url.pathname === '/' || url.pathname === '/health') {
+      // CORS only for origins we would serve anyway; a browser navigation to
+      // this URL sends no Origin and needs none.
+      return json(identity(origin, allow), 200, allow ? corsHeaders(allow) : undefined);
+    }
+
+    if (!allow) {
+      return json({ worker: WORKER_NAME, error: 'origin not allowed', origin: origin || null }, 403);
+    }
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(allow) });
     }
     if (request.method !== 'GET') {
-      return new Response('method not allowed\n', { status: 405, headers: corsHeaders(allow) });
+      return json({ worker: WORKER_NAME, error: 'method not allowed', method: request.method }, 405, corsHeaders(allow));
     }
 
-    const path = upstreamPathFor(new URL(request.url).pathname);
-    if (!path) return new Response('unsupported path\n', { status: 404, headers: corsHeaders(allow) });
+    const path = upstreamPathFor(url.pathname);
+    if (!path) {
+      // Echo the path back: a literal "{lat}" or a mangled paste is invisible
+      // otherwise, and it is the caller's own input, not ours to withhold.
+      return json(
+        { worker: WORKER_NAME, error: 'unsupported path', path: url.pathname, pathShape: PATH_SHAPE },
+        404,
+        corsHeaders(allow),
+      );
+    }
 
     const target = `${UPSTREAM}${path}`;
     const cache = caches.default;

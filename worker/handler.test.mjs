@@ -87,7 +87,7 @@ describe('worker fetch handler', () => {
   });
 
   it('refuses a path outside the point-query shape', async () => {
-    for (const p of ['/', '/v2/point/64/-21/25', '/admin', '/v2/lat/64/lon/-21/dist/999']) {
+    for (const p of ['/v2/point/64/-21/25', '/admin', '/v2/lat/64/lon/-21/dist/999']) {
       const res = await call(p);
       expect(res.status).toBe(404);
     }
@@ -117,5 +117,97 @@ describe('worker fetch handler', () => {
     const res = await call('/v2/lat/64/lon/-21/dist/25');
     expect(res.status).toBe(502);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+  });
+
+  // Every rejection has to name the worker, because the alternative — an
+  // anonymous 404 — is exactly what Cloudflare returns for a hostname with no
+  // worker on it, and the two are then impossible to tell apart.
+  it('identifies itself on every rejection it issues', async () => {
+    const rejections = [
+      await call('/admin'),
+      await call('/v2/lat/64/lon/-21/dist/25', { method: 'POST' }),
+      await worker.fetch(
+        new Request('https://proxy.example/v2/lat/64/lon/-21/dist/25', {
+          headers: { Origin: 'https://evil.example' },
+        }),
+        ENV,
+        ctx,
+      ),
+    ];
+    for (const res of rejections) {
+      expect(res.headers.get('X-Worker')).toBe('flightwall-proxy');
+      expect((await res.json()).worker).toBe('flightwall-proxy');
+    }
+  });
+
+  it('names the path it rejected, so a literal {lat} is visible', async () => {
+    const res = await call('/v2/lat/{lat}/lon/{lon}/dist/{nm}');
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('unsupported path');
+    expect(body.path).toBe('/v2/lat/%7Blat%7D/lon/%7Blon%7D/dist/%7Bnm%7D');
+  });
+});
+
+// A proxy that refuses everything without an allowed Origin cannot answer the
+// first question after a deploy — did it land? A browser visit sends no Origin,
+// so the 403 was indistinguishable from a missing worker.
+describe('identity endpoint', () => {
+  const bare = (path) => worker.fetch(new Request(`https://proxy.example${path}`), ENV, ctx);
+
+  it('answers a browser visit that carries no Origin at all', async () => {
+    for (const path of ['/', '/health']) {
+      const res = await bare(path);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.worker).toBe('flightwall-proxy');
+      expect(body.upstream).toBe('ADSB.FI');
+      expect(body.origin).toBeNull();
+      expect(body.originAllowed).toBe(false);
+    }
+    expect(fetched).toEqual([]);
+  });
+
+  it('reports back whether the calling origin is accepted', async () => {
+    const ok = await call('/health');
+    expect((await ok.json()).originAllowed).toBe(true);
+
+    const denied = await worker.fetch(
+      new Request('https://proxy.example/health', { headers: { Origin: 'https://evil.example' } }),
+      ENV,
+      ctx,
+    );
+    expect(denied.status).toBe(200); // the report is the point; it is not a proxy grant
+    const body = await denied.json();
+    expect(body.originAllowed).toBe(false);
+    expect(body.origin).toBe('https://evil.example');
+  });
+
+  it('publishes the path shape a caller has to match', async () => {
+    expect((await bare('/')).headers.get('X-Worker')).toBe('flightwall-proxy');
+    const body = await (await bare('/')).json();
+    expect(body.pathShape).toBe('/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}');
+  });
+
+  it('grants CORS to an allowed origin but not to a stranger', async () => {
+    const ok = await call('/health');
+    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+    const bareRes = await bare('/health');
+    expect(bareRes.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
+  // A diagnostic that disagrees with the gate it reports on is worse than none,
+  // so originAllowed has to track whether proxying actually works — including
+  // under a wildcard, where a stranger origin is genuinely served.
+  it('reports originAllowed in lockstep with whether proxying is permitted', async () => {
+    const stranger = 'https://elsewhere.example';
+    for (const env of [{ ALLOWED_ORIGINS: ORIGIN }, { ALLOWED_ORIGINS: '*' }]) {
+      const req = (path) =>
+        worker.fetch(new Request(`https://proxy.example${path}`, { headers: { Origin: stranger } }), env, ctx);
+
+      const reported = (await (await req('/health')).json()).originAllowed;
+      const proxied = (await req('/v2/lat/64/lon/-21/dist/25')).status !== 403;
+      expect(reported).toBe(proxied);
+    }
   });
 });

@@ -51,6 +51,25 @@ one query to adsb.fi and adds the header:
 cd worker && npx wrangler deploy
 ```
 
+Wrangler prints the deployed hostname. Confirm it landed by opening that
+hostname in a browser — `/` answers with an identity card and needs no special
+headers:
+
+```json
+{
+  "worker": "flightwall-proxy",
+  "upstream": "ADSB.FI",
+  "pathShape": "/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}",
+  "origin": null,
+  "originAllowed": false
+}
+```
+
+`originAllowed: false` is expected for a browser visit, which sends no `Origin`
+at all. If you instead get a Cloudflare error page, nothing is deployed at that
+hostname — every response the worker itself produces, including its failures,
+carries `"worker": "flightwall-proxy"` and an `X-Worker` header.
+
 Then point the wall at it with `api`, which takes a URL template using `{lat}`,
 `{lon}` and `{nm}` (nautical miles):
 
