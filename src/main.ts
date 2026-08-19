@@ -121,6 +121,7 @@ if (!config) {
   const applyView = (): void => {
     mapView.setVisible(showingMap);
     board.setVisible(!showingMap);
+    paintMap();
     viewBtn.textContent = showingMap ? 'BOARD' : 'MAP';
     try {
       localStorage.setItem(VIEW_KEY, showingMap ? 'map' : 'board');
@@ -139,7 +140,6 @@ if (!config) {
   viewBtn.setAttribute('aria-label', 'Switch between board and map');
   viewBtn.addEventListener('click', toggleView);
   app.appendChild(viewBtn);
-  applyView();
 
   let settingsOpen = false;
   const gearBtn = document.createElement('button');
@@ -182,6 +182,9 @@ if (!config) {
   const TRAIL_WINDOW_MS = trailWindowMs(config);
   const tracks = new TrackStore();
 
+  // Deferred until tracks/lastSnapshot exist, since painting the map reads both.
+  applyView();
+
   // Route as displayed for one aircraft: cached route gated by the corridor
   // plausibility check against the aircraft's current position.
   function plausibleRouteFor(a: Aircraft): Route | null {
@@ -200,11 +203,18 @@ if (!config) {
     return extras;
   }
 
+  function paintMap(): void {
+    // Deliberately not gated on lastSnapshot: with no data the scope still
+    // draws and reports NO SIGNAL, instead of leaving a black screen that is
+    // indistinguishable from an empty sky.
+    if (showingMap) mapView.update(lastSnapshot, tracks.tracks(), Date.now());
+  }
+
   function rerender(): void {
+    paintMap();
     if (!lastSnapshot) return;
     board.update(lastSnapshot, buildExtras(lastSnapshot));
     updateSpotlight(lastSnapshot);
-    if (showingMap) mapView.update(lastSnapshot, tracks.tracks());
   }
 
   // adsbdb first; on a definitive miss, hexdb's callsign→ICAO-pair as second
@@ -265,7 +275,7 @@ if (!config) {
       // that is when these positions were true.
       tracks.append(snap.aircraft, snap.lastSuccessAt);
       tracks.prune(snap.lastSuccessAt, TRAIL_WINDOW_MS);
-      if (showingMap) mapView.update(snap, tracks.tracks());
+      paintMap();
       const now = Date.now();
       for (const a of snap.aircraft) {
         const cs = a.callsign;
@@ -342,7 +352,7 @@ if (!config) {
   setInterval(() => {
     if (settingsOpen) return;
     board.tickClock(Date.now(), lastSnapshot?.lastSuccessAt ?? bootAt);
-    if (showingMap && lastSnapshot) mapView.update(lastSnapshot, tracks.tracks());
+    paintMap(); // 1 Hz: ages the trails and the NO SIGNAL / STALE countdown
   }, 1000);
 
   // Stall watchdog: if no tick for 90 s while visible, restart the loop.

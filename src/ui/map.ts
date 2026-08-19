@@ -2,8 +2,9 @@ import type { Aircraft, Config } from '../types';
 import type { Snapshot } from '../state';
 import type { TrackPoint } from '../tracks';
 import type { CoastlineStore } from '../coast';
+import { computeStatus } from '../state';
 import { initialBearingDeg } from '../geo';
-import { formatAlt } from '../format';
+import { formatAlt, formatAgeSeconds } from '../format';
 import { makeProjector, ringRadiiKm, placeLabels, type Projector } from './mapproject';
 import { STAGE_W, STAGE_H } from '../stage';
 
@@ -14,6 +15,8 @@ const COLOR_AMBER_DIM = '#b37c00';
 const COLOR_WHITE = '#e8e2d0';
 const COLOR_DIM = '#6b675c';
 const COLOR_COAST = '#3d4852';
+const COLOR_GREEN = '#3fbf5a';
+const COLOR_RED = '#e0442c';
 
 const CX = STAGE_W / 2;
 const CY = STAGE_H / 2 + 20;
@@ -108,6 +111,8 @@ export class MapView {
    *  instead of waiting for the next poll to reveal the geography. */
   private lastSnap: Snapshot | null = null;
   private lastTracks: ReadonlyMap<string, readonly TrackPoint[]> = new Map();
+  private lastNow = 0;
+  private hasDrawn = false;
 
   constructor(
     root: HTMLElement,
@@ -138,8 +143,10 @@ export class MapView {
             if (px.length >= 4) this.coastPx.push(px);
           }
         }
-        if (this.coastPx.length > 0 && this.lastSnap) {
-          this.update(this.lastSnap, this.lastTracks);
+        // Repaint whatever is on screen, snapshot or not — the scope is drawn
+        // before any data arrives, so waiting for one would hide the geography.
+        if (this.coastPx.length > 0 && this.hasDrawn) {
+          this.update(this.lastSnap, this.lastTracks, this.lastNow);
         }
       });
     }
@@ -153,11 +160,22 @@ export class MapView {
     return this.canvas;
   }
 
-  update(snap: Snapshot, tracks: ReadonlyMap<string, readonly TrackPoint[]>): void {
+  /**
+   * Paint the scope. `snap` is null until the first successful poll — the rings,
+   * coastline and compass are drawn regardless, because a feed that is failing
+   * must look like a failing feed rather than like an empty sky.
+   */
+  update(
+    snap: Snapshot | null,
+    tracks: ReadonlyMap<string, readonly TrackPoint[]>,
+    now: number,
+  ): void {
     this.lastSnap = snap;
     this.lastTracks = tracks;
+    this.lastNow = now;
     const ctx = this.ctx;
     if (!ctx) return; // no 2D backend — nothing to draw, and nothing to crash
+    this.hasDrawn = true;
 
     ctx.clearRect(0, 0, STAGE_W, STAGE_H);
     ctx.fillStyle = COLOR_BG;
@@ -166,9 +184,9 @@ export class MapView {
     this.drawCoast(ctx);
     this.drawRings(ctx);
     this.drawTrails(ctx, tracks);
-    this.drawAircraft(ctx, snap.aircraft, tracks);
+    if (snap) this.drawAircraft(ctx, snap.aircraft, tracks);
     this.drawHome(ctx);
-    this.drawChrome(ctx, snap);
+    this.drawChrome(ctx, snap, now);
   }
 
   private drawCoast(ctx: CanvasRenderingContext2D): void {
@@ -313,7 +331,7 @@ export class MapView {
     ctx.stroke();
   }
 
-  private drawChrome(ctx: CanvasRenderingContext2D, snap: Snapshot): void {
+  private drawChrome(ctx: CanvasRenderingContext2D, snap: Snapshot | null, now: number): void {
     ctx.fillStyle = COLOR_AMBER;
     ctx.font = `28px ${FONT}`;
     ctx.fillText(`OVERHEAD · ${(this.config.label ?? 'HOME').toUpperCase()}`, 48, 56);
@@ -321,7 +339,21 @@ export class MapView {
     ctx.fillStyle = COLOR_DIM;
     ctx.font = `18px ${FONT}`;
     ctx.fillText(`WITHIN ${Math.round(this.config.radiusKm)} KM`, 48, 84);
-    ctx.fillText(`${snap.aircraft.length} AIRCRAFT`, 48, 108);
+
+    // "0 AIRCRAFT" reads the same whether the sky is empty or the feed is dead,
+    // so the feed's own health is stated next to the count.
+    const status = snap ? computeStatus(snap.lastSuccessAt, now) : 'lost';
+    ctx.fillStyle =
+      status === 'live' ? COLOR_GREEN : status === 'stale' ? COLOR_AMBER : COLOR_RED;
+    ctx.fillText(
+      snap
+        ? `${snap.aircraft.length} AIRCRAFT · ${status.toUpperCase()}` +
+            (status === 'live' ? '' : ` ${formatAgeSeconds(now - snap.lastSuccessAt)}`)
+        : 'NO SIGNAL · WAITING FOR DATA',
+      48,
+      108,
+    );
+    ctx.fillStyle = COLOR_DIM;
 
     ctx.font = `14px ${FONT}`;
     ctx.fillText(
