@@ -1,0 +1,8 @@
+name = "flightwall-proxy"
+main = "proxy.mjs"
+compatibility_date = "2026-01-01"
+
+# Origins allowed to use the proxy. Add your own if you serve the wall
+# elsewhere; a "*" here would turn this into a free CORS proxy for anyone.
+[vars]
+ALLOWED_ORIGINS = "https://kristinnthor.github.io"

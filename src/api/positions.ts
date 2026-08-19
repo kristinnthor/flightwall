@@ -23,6 +23,9 @@ export interface RawV2Aircraft {
 
 export interface AircraftProvider {
   fetchAircraft(lat: number, lon: number, radiusKm: number): Promise<Aircraft[]>;
+  /** Network that actually supplied the data, when the endpoint declares one.
+   *  A proxy sits at its own hostname but must credit the feed behind it. */
+  readonly upstreamLabel?: string | null;
 }
 
 export function normalizeAircraft(
@@ -63,14 +66,58 @@ export function normalizeAircraft(
   };
 }
 
-export function buildPointUrl(base: string, lat: number, lon: number, radiusKm: number): string {
-  const nm = Math.min(250, Math.max(1, Math.ceil(radiusKm / NM_TO_KM)));
-  return `${base}/point/${lat}/${lon}/${nm}`;
+/** Query radius in nautical miles, clamped to the 250 NM every feed caps at. */
+export function radiusToNm(radiusKm: number): number {
+  return Math.min(250, Math.max(1, Math.ceil(radiusKm / NM_TO_KM)));
 }
 
-export class AirplanesLiveProvider implements AircraftProvider {
+/**
+ * Build a request URL from a feed template.
+ *
+ * Feeds do NOT share one URL shape: airplanes.live uses
+ * `/v2/point/{lat}/{lon}/{nm}` while adsb.fi uses
+ * `/v3/lat/{lat}/lon/{lon}/dist/{nm}`. Assuming a single shape is what made
+ * adsb.fi answer 404 rather than data. A template with {lat}/{lon}/{nm}
+ * placeholders expresses any of them; a bare base URL keeps the original
+ * point-style behaviour so existing api= links still work.
+ */
+export function buildPointUrl(
+  template: string,
+  lat: number,
+  lon: number,
+  radiusKm: number,
+): string {
+  const nm = radiusToNm(radiusKm);
+  if (template.includes('{lat}')) {
+    return template
+      .replace('{lat}', String(lat))
+      .replace('{lon}', String(lon))
+      .replace('{nm}', String(nm));
+  }
+  return `${template}/point/${lat}/${lon}/${nm}`;
+}
+
+/**
+ * The aircraft array, whatever the feed calls it. ADSBExchange-v2 responses use
+ * `ac`; the v3 shape uses `aircraft`. Accepting both means a feed can be added
+ * without knowing which generation it serves.
+ */
+export function aircraftArrayOf(body: unknown): RawV2Aircraft[] {
+  if (typeof body !== 'object' || body === null) return [];
+  const o = body as Record<string, unknown>;
+  for (const key of ['ac', 'aircraft']) {
+    if (Array.isArray(o[key])) return o[key] as RawV2Aircraft[];
+  }
+  return [];
+}
+
+/** One feed, addressed by URL template. Named for the query it makes, not for
+ *  any particular network — several serve the same aircraft shape. */
+export class PointFeedProvider implements AircraftProvider {
+  upstreamLabel: string | null = null;
+
   constructor(
-    private baseUrl = 'https://api.airplanes.live/v2',
+    private template = 'https://api.airplanes.live/v2',
     private timeoutMs = 10_000,
   ) {}
 
@@ -78,14 +125,14 @@ export class AirplanesLiveProvider implements AircraftProvider {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(buildPointUrl(this.baseUrl, lat, lon, radiusKm), {
+      const res = await fetch(buildPointUrl(this.template, lat, lon, radiusKm), {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`positions HTTP ${res.status}`);
-      const body: { ac?: RawV2Aircraft[] } = await res.json();
+      this.upstreamLabel = res.headers.get('X-Upstream-Source');
       const center = { lat, lon };
       const out: Aircraft[] = [];
-      for (const raw of body.ac ?? []) {
+      for (const raw of aircraftArrayOf(await res.json())) {
         const a = normalizeAircraft(raw, center);
         if (a) out.push(a);
       }
@@ -103,15 +150,21 @@ export class AirplanesLiveProvider implements AircraftProvider {
  * single hardcoded source is a single point of failure.
  */
 export const DEFAULT_API_BASES = [
+  // Kept first: the source this wall was built against, in case feeder-only
+  // access is lifted. Currently answers browser requests with a 403.
   'https://api.airplanes.live/v2',
-  'https://api.adsb.fi/v2',
-  'https://api.adsb.one/v2',
+  // adsb.fi, per its published API reference: different host AND path shape.
+  // v3 is the documented current endpoint; v2 still works but is deprecated
+  // and returns a different format, so both are listed and the parser accepts
+  // either aircraft-array key.
+  'https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}',
+  'https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{nm}',
 ];
 
 /** Host of a base URL, upper-cased for the attribution line. */
 export function sourceLabel(base: string): string {
   const m = /^https:\/\/([^/]+)/.exec(base);
-  return (m ? m[1]! : base).replace(/^api\./, '').toUpperCase();
+  return (m ? m[1]! : base).replace(/^(api|opendata)\./, '').toUpperCase();
 }
 
 /**
@@ -124,17 +177,23 @@ export function sourceLabel(base: string): string {
  */
 export class FailoverProvider implements AircraftProvider {
   private active = 0;
+  private upstream: string | null = null;
 
   constructor(
     private bases: string[] = DEFAULT_API_BASES,
-    private make: (base: string) => AircraftProvider = (base) => new AirplanesLiveProvider(base),
+    private make: (base: string) => AircraftProvider = (base) => new PointFeedProvider(base),
   ) {
     if (bases.length === 0) throw new Error('FailoverProvider needs at least one base URL');
   }
 
-  /** Base URL currently serving data — drives the attribution line. */
+  /** Base URL currently serving data. */
   get activeBase(): string {
     return this.bases[this.active]!;
+  }
+
+  /** Who to credit: the network a proxy names, else the host being called. */
+  get activeLabel(): string {
+    return this.upstream ?? sourceLabel(this.activeBase);
   }
 
   async fetchAircraft(lat: number, lon: number, radiusKm: number): Promise<Aircraft[]> {
@@ -142,8 +201,10 @@ export class FailoverProvider implements AircraftProvider {
     for (let i = 0; i < this.bases.length; i++) {
       const index = (this.active + i) % this.bases.length;
       try {
-        const list = await this.make(this.bases[index]!).fetchAircraft(lat, lon, radiusKm);
+        const provider = this.make(this.bases[index]!);
+        const list = await provider.fetchAircraft(lat, lon, radiusKm);
         this.active = index; // stick to whatever answered
+        this.upstream = provider.upstreamLabel ?? null;
         return list;
       } catch (err) {
         lastError = err;

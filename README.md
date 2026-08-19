@@ -26,6 +26,50 @@ saved config and starts over.
 | `r` | Radius in km (1–460) |
 | `label` | Name shown in the header (optional) |
 | `t` | Minutes of flight path drawn on the map (0–180, default 60; `0` shows positions with no trail) |
+| `api` | Pin the aircraft feed to one source instead of trying the built-in list (see below) |
+
+### Choosing a data feed
+
+**The community ADS-B networks do not allow browser access.** Measured from the
+deployed wall:
+
+| Feed | Result |
+|---|---|
+| airplanes.live | `403` — restricted to feeders |
+| adsb.one | `403` |
+| adsb.lol | connection refused |
+| adsb.fi | **`200` with data, but no `Access-Control-Allow-Origin`** |
+
+adsb.fi has the data and returns it; the browser discards it because the
+response carries no CORS header. These are server-side APIs, so a static page
+cannot read them directly no matter which URL it uses.
+
+The fix is the small Cloudflare Worker in `worker/` — it forwards FlightWall's
+one query to adsb.fi and adds the header:
+
+```
+cd worker && npx wrangler deploy
+```
+
+Then point the wall at it with `api`, which takes a URL template using `{lat}`,
+`{lon}` and `{nm}` (nautical miles):
+
+```
+#lat=64.14&lon=-21.94&r=100&api=https://flightwall-proxy.<you>.workers.dev/v2/lat/{lat}/lon/{lon}/dist/{nm}
+```
+
+At the 5 s poll rate that is ~17k requests/day, inside Cloudflare's free tier.
+The worker caches for 4 s so several viewers cannot breach adsb.fi's limit of
+one request per second.
+
+The worker is **not** an open proxy: it accepts only this one path shape,
+forwards only to adsb.fi, and refuses origins outside `ALLOWED_ORIGINS` in
+`worker/wrangler.toml`. Change that variable if you serve the wall elsewhere.
+
+Setting `api` pins the feed to exactly that source with no failover, which is
+what you want when testing whether something works. A bare base URL keeps the
+older `/point/{lat}/{lon}/{nm}` layout. Aircraft arrays named `ac` or
+`aircraft` are both understood.
 
 ## Board and map
 
@@ -67,6 +111,9 @@ Zero runtime dependencies. Deployed to GitHub Pages by CI on every push to main.
 
 - Live positions: [airplanes.live](https://airplanes.live) — community ADS-B network,
   non-commercial use. Consider [feeding](https://airplanes.live/how-to-feed/) if you can.
+  Currently feeder-only, so the wall reaches [adsb.fi](https://adsb.fi) through the
+  proxy in `worker/` instead — see "Choosing a data feed". The footer credits
+  whichever source is actually serving data.
 - Routes, airlines & aircraft operators: [adsbdb.com](https://www.adsbdb.com), with
   [hexdb.io](https://hexdb.io) as fallback for routes, airports, and operators.
 - Photos: [planespotters.net](https://www.planespotters.net) — photos remain theirs,

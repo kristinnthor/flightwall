@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  normalizeAircraft, buildPointUrl, AirplanesLiveProvider,
+  normalizeAircraft, buildPointUrl, PointFeedProvider, aircraftArrayOf,
   FailoverProvider, DEFAULT_API_BASES, sourceLabel,
 } from './positions';
 import type { Aircraft } from '../types';
@@ -79,26 +79,26 @@ describe('buildPointUrl', () => {
   });
 });
 
-describe('AirplanesLiveProvider', () => {
+describe('PointFeedProvider', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('fetches, normalizes, filters', async () => {
     const body = { ac: [AIRBORNE, { ...AIRBORNE, hex: 'aaa', alt_baro: 'ground' }], total: 2 };
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
-    const list = await new AirplanesLiveProvider('https://x/v2').fetchAircraft(64.13, -21.94, 50);
+    const list = await new PointFeedProvider('https://x/v2').fetchAircraft(64.13, -21.94, 50);
     expect(list).toHaveLength(1);
     expect(list[0]?.hex).toBe('4cc2b5');
   });
 
   it('throws on HTTP error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('slow down', { status: 429 })));
-    await expect(new AirplanesLiveProvider('https://x/v2').fetchAircraft(0, 0, 10))
+    await expect(new PointFeedProvider('https://x/v2').fetchAircraft(0, 0, 10))
       .rejects.toThrow('429');
   });
 
   it('tolerates missing ac array', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{"msg":"No error"}', { status: 200 })));
-    await expect(new AirplanesLiveProvider('https://x/v2').fetchAircraft(0, 0, 10)).resolves.toEqual([]);
+    await expect(new PointFeedProvider('https://x/v2').fetchAircraft(0, 0, 10)).resolves.toEqual([]);
   });
 });
 
@@ -190,6 +190,98 @@ describe('FailoverProvider', () => {
     expect(DEFAULT_API_BASES[0]).toContain('airplanes.live');
     expect(DEFAULT_API_BASES.length).toBeGreaterThan(1);
     for (const b of DEFAULT_API_BASES) expect(b.startsWith('https://')).toBe(true);
+  });
+});
+
+// adsb.fi answered 404, not 403 - the host was fine, the URL shape was not.
+// Feeds do not share one path layout, so the template has to express it.
+describe('buildPointUrl templates', () => {
+  it('keeps the point-style shape for a bare base URL', () => {
+    expect(buildPointUrl('https://api.airplanes.live/v2', 64.1, -21.9, 50))
+      .toBe('https://api.airplanes.live/v2/point/64.1/-21.9/27');
+  });
+
+  it('fills lat/lon/nm placeholders for feeds with another layout', () => {
+    expect(buildPointUrl('https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}', 64.1, -21.9, 50))
+      .toBe('https://opendata.adsb.fi/api/v3/lat/64.1/lon/-21.9/dist/27');
+  });
+
+  it('clamps the radius to the 250 NM every feed caps at', () => {
+    expect(buildPointUrl('https://x/{lat}/{lon}/{nm}', 0, 0, 100000)).toBe('https://x/0/0/250');
+    expect(buildPointUrl('https://x/{lat}/{lon}/{nm}', 0, 0, 0.1)).toBe('https://x/0/0/1');
+  });
+});
+
+describe('aircraftArrayOf', () => {
+  it('reads the v2 "ac" key', () => {
+    expect(aircraftArrayOf({ ac: [{ hex: 'a' }] })).toHaveLength(1);
+  });
+
+  // The v3 shape names it differently; accepting both means a feed can be
+  // added without knowing which generation it serves.
+  it('reads the v3 "aircraft" key', () => {
+    expect(aircraftArrayOf({ aircraft: [{ hex: 'a' }, { hex: 'b' }] })).toHaveLength(2);
+  });
+
+  it('prefers ac when a response somehow carries both', () => {
+    expect(aircraftArrayOf({ ac: [{ hex: 'a' }], aircraft: [] })).toHaveLength(1);
+  });
+
+  it('returns empty for anything unusable rather than throwing', () => {
+    for (const body of [null, undefined, 42, 'nope', {}, { ac: 'no' }, { total: 3 }]) {
+      expect(aircraftArrayOf(body)).toEqual([]);
+    }
+  });
+});
+
+describe('default feed list', () => {
+  it('lists airplanes.live first and adsb.fi on its documented host and path', () => {
+    expect(DEFAULT_API_BASES[0]).toContain('airplanes.live');
+    const fi = DEFAULT_API_BASES.filter((b) => b.includes('adsb.fi'));
+    expect(fi.length).toBeGreaterThan(0);
+    for (const b of fi) {
+      expect(b).toContain('opendata.adsb.fi/api'); // not api.adsb.fi, which 404s
+      expect(b).toContain('/lat/{lat}/lon/{lon}/dist/{nm}');
+    }
+  });
+
+  it('labels sources by network, not by hostname prefix', () => {
+    expect(sourceLabel('https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}')).toBe('ADSB.FI');
+  });
+});
+
+// A proxy sits at its own hostname, but the credit belongs to the network
+// behind it — crediting "something.workers.dev" credits nobody.
+describe('upstream attribution', () => {
+  const A = 'https://proxy.example/v2/lat/{lat}/lon/{lon}/dist/{nm}';
+
+  function providerWith(upstreamLabel: string | null) {
+    return {
+      upstreamLabel,
+      fetchAircraft: async () => [],
+    };
+  }
+
+  it('credits the network a proxy names, not the proxy host', async () => {
+    const p = new FailoverProvider([A], () => providerWith('ADSB.FI'));
+    await p.fetchAircraft(64, -21, 50);
+    expect(p.activeLabel).toBe('ADSB.FI');
+  });
+
+  it('falls back to the host when nothing declares an upstream', async () => {
+    const p = new FailoverProvider([A], () => providerWith(null));
+    await p.fetchAircraft(64, -21, 50);
+    expect(p.activeLabel).toBe('PROXY.EXAMPLE');
+  });
+
+  it('drops a stale upstream when a later source declares none', async () => {
+    let label: string | null = 'ADSB.FI';
+    const p = new FailoverProvider([A], () => providerWith(label));
+    await p.fetchAircraft(64, -21, 50);
+    expect(p.activeLabel).toBe('ADSB.FI');
+    label = null;
+    await p.fetchAircraft(64, -21, 50);
+    expect(p.activeLabel).toBe('PROXY.EXAMPLE');
   });
 });
 
