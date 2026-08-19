@@ -74,8 +74,8 @@ settings screen:
 
 The value is stored on the TV and survives app updates, so this is a one-time
 step. It is needed because the free ADS-B feeds refuse browser requests, and a
-Tizen webview is a browser as far as they are concerned — see "Choosing a data
-feed" in the README.
+Tizen webview is a browser as far as they are concerned — see
+[Choosing a data feed](https://github.com/kristinnthor/flightwall#choosing-a-data-feed).
 
 ### Updating later
 Bump `version` in `tizen/config.xml`, re-run the build/install commands above.
