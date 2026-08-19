@@ -8,6 +8,7 @@ import { AircraftInfo } from './api/aircraft';
 import { PlanespottersPhotos } from './api/photos';
 import { isRoutePlausible } from './routecheck';
 import { PollLoop, type Snapshot } from './state';
+import { TrackStore } from './tracks';
 import { Board, type RowExtras } from './ui/board';
 import { renderSettings } from './ui/settings';
 import { armButton } from './ui/armed';
@@ -134,6 +135,12 @@ if (!config) {
   const opRetryAt = new Map<string, number>();
   let lastSnapshot: Snapshot | null = null;
 
+  // Flight paths, accumulated forward from launch — the API only reports what
+  // is in radius now, so there is nothing to backfill. The window becomes the
+  // configurable trailMinutes; 60 min is its intended default.
+  const TRAIL_WINDOW_MS = 60 * 60_000;
+  const tracks = new TrackStore();
+
   // Route as displayed for one aircraft: cached route gated by the corridor
   // plausibility check against the aircraft's current position.
   function plausibleRouteFor(a: Aircraft): Route | null {
@@ -212,6 +219,10 @@ if (!config) {
       lastSnapshot = snap;
       board.update(snap, buildExtras(snap));
       updateSpotlight(snap);
+      // Stamped with the poll's own success time rather than the wall clock:
+      // that is when these positions were true.
+      tracks.append(snap.aircraft, snap.lastSuccessAt);
+      tracks.prune(snap.lastSuccessAt, TRAIL_WINDOW_MS);
       const now = Date.now();
       for (const a of snap.aircraft) {
         const cs = a.callsign;
