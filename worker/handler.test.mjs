@@ -195,4 +195,19 @@ describe('identity endpoint', () => {
     const bareRes = await bare('/health');
     expect(bareRes.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
+
+  // A diagnostic that disagrees with the gate it reports on is worse than none,
+  // so originAllowed has to track whether proxying actually works — including
+  // under a wildcard, where a stranger origin is genuinely served.
+  it('reports originAllowed in lockstep with whether proxying is permitted', async () => {
+    const stranger = 'https://elsewhere.example';
+    for (const env of [{ ALLOWED_ORIGINS: ORIGIN }, { ALLOWED_ORIGINS: '*' }]) {
+      const req = (path) =>
+        worker.fetch(new Request(`https://proxy.example${path}`, { headers: { Origin: stranger } }), env, ctx);
+
+      const reported = (await (await req('/health')).json()).originAllowed;
+      const proxied = (await req('/v2/lat/64/lon/-21/dist/25')).status !== 403;
+      expect(reported).toBe(proxied);
+    }
+  });
 });

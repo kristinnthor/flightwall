@@ -75,14 +75,18 @@ function corsHeaders(origin) {
  * which sends no Origin, is indistinguishable from a missing deploy. Nothing
  * here is privileged: it names the fixed upstream and tells callers only
  * whether their own origin is accepted, which one request would reveal anyway.
+ *
+ * Takes the gate's own verdict rather than re-deriving it. Re-deriving would
+ * be equivalent today, but a diagnostic that disagrees with the thing it is
+ * diagnosing is worse than no diagnostic, so it reports what actually decided.
  */
-export function identity(origin, env) {
+export function identity(origin, allow) {
   return {
     worker: WORKER_NAME,
     upstream: UPSTREAM_LABEL,
     pathShape: PATH_SHAPE,
     origin: origin || null,
-    originAllowed: allowedOrigin(origin, env) !== null,
+    originAllowed: allow !== null,
   };
 }
 
@@ -104,7 +108,7 @@ export default {
     if (url.pathname === '/' || url.pathname === '/health') {
       // CORS only for origins we would serve anyway; a browser navigation to
       // this URL sends no Origin and needs none.
-      return json(identity(origin, env), 200, allow ? corsHeaders(allow) : undefined);
+      return json(identity(origin, allow), 200, allow ? corsHeaders(allow) : undefined);
     }
 
     if (!allow) {
