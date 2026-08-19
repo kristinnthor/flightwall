@@ -12,13 +12,32 @@ Open the hosted app and configure your location:
 The settings screen builds a personal URL like:
 
 ```
-https://kristinnthor.github.io/flightwall/#lat=64.14&lon=-21.94&r=50&label=HOME
+https://kristinnthor.github.io/flightwall/#lat=64.14&lon=-21.94&r=50&label=HOME&t=60
 ```
 
 Open that URL anywhere — phone, laptop, TV browser — and the wall starts.
 Config lives only in the URL and your browser (never on a server). On the
 board, the ⚙ gear (or OK on a TV remote) reopens settings; RESET wipes the
 saved config and starts over.
+
+| Parameter | Meaning |
+|---|---|
+| `lat`, `lon` | Home point the wall watches from |
+| `r` | Radius in km (1–460) |
+| `label` | Name shown in the header (optional) |
+| `t` | Minutes of flight path drawn on the map (0–180, default 60; `0` shows positions with no trail) |
+
+## Board and map
+
+Two views of the same sky. The board is the departure-board table; the map is
+a radar scope — home at the centre, range rings, coastline, and each
+aircraft's path over the last `t` minutes. Switch with the MAP/BOARD button,
+or left/right on a TV remote. The choice is remembered.
+
+Trails build up while the wall is running: the data source only reports
+aircraft currently in radius, so there is no history to backfill. A
+freshly-started wall shows an empty scope that fills in over the following
+hour.
 
 ## Phones & tablets (PWA)
 

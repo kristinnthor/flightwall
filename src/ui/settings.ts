@@ -13,6 +13,7 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       <label>LATITUDE <input name="lat" type="text" inputmode="decimal" maxlength="12"></label>
       <label>LONGITUDE <input name="lon" type="text" inputmode="decimal" maxlength="12"></label>
       <label>RADIUS KM (1–460) <input name="r" type="text" inputmode="decimal" maxlength="4"></label>
+      <label>TRAIL MINUTES (0–180) <input name="t" type="text" inputmode="decimal" maxlength="3"></label>
       <label>LABEL <input name="label" type="text" maxlength="24"></label>
       <button type="button" class="geo-btn">USE MY LOCATION</button>
       <div class="share-url"></div>
@@ -31,6 +32,7 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
   input('lat').value = initial.lat !== undefined ? String(initial.lat) : '';
   input('lon').value = initial.lon !== undefined ? String(initial.lon) : '';
   input('r').value = initial.radiusKm !== undefined ? String(initial.radiusKm) : '';
+  input('t').value = initial.trailMinutes !== undefined ? String(initial.trailMinutes) : '';
   input('label').value = initial.label ?? '';
   const shareEl = root.querySelector<HTMLElement>('.share-url')!;
 
@@ -47,6 +49,8 @@ export function renderSettings(root: HTMLElement, initial: Partial<Config>, page
       radiusKm: num('r'),
     };
     if (input('label').value) cfg.label = input('label').value;
+    // Blank means "unset", which loads the default — not an invalid config.
+    if (input('t').value.trim() !== '') cfg.trailMinutes = num('t');
     return isValidConfig(cfg) ? cfg : null;
   };
 

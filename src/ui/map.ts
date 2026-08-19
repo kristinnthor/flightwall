@@ -104,6 +104,10 @@ export class MapView {
   /** Coastline pre-projected to pixels: the projector never changes, so this is
    *  computed once instead of re-projecting thousands of points every redraw. */
   private coastPx: number[][] = [];
+  /** Last frame's inputs, so the async coastline can repaint what is on screen
+   *  instead of waiting for the next poll to reveal the geography. */
+  private lastSnap: Snapshot | null = null;
+  private lastTracks: ReadonlyMap<string, readonly TrackPoint[]> = new Map();
 
   constructor(
     root: HTMLElement,
@@ -134,6 +138,9 @@ export class MapView {
             if (px.length >= 4) this.coastPx.push(px);
           }
         }
+        if (this.coastPx.length > 0 && this.lastSnap) {
+          this.update(this.lastSnap, this.lastTracks);
+        }
       });
     }
   }
@@ -147,6 +154,8 @@ export class MapView {
   }
 
   update(snap: Snapshot, tracks: ReadonlyMap<string, readonly TrackPoint[]>): void {
+    this.lastSnap = snap;
+    this.lastTracks = tracks;
     const ctx = this.ctx;
     if (!ctx) return; // no 2D backend — nothing to draw, and nothing to crash
 

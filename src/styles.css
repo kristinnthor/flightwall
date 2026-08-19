@@ -163,7 +163,7 @@ html, body {
 .settings-hint { color: var(--dim); font-size: 17px; }
 
 /* TV remote focus visibility — remotes navigate by focus. */
-.settings input:focus, .gear-btn:focus, .board-reset-btn:focus {
+.settings input:focus, .gear-btn:focus, .board-reset-btn:focus, .view-toggle-btn:focus {
   outline: 3px solid var(--amber);
   outline-offset: 2px;
 }
@@ -188,15 +188,16 @@ body.doc-mode #app {
   .settings-actions { flex-wrap: wrap; }
 }
 
-.gear-btn, .board-reset-btn {
+.gear-btn, .board-reset-btn, .view-toggle-btn {
   position: absolute; bottom: 12px;
   background: none; border: 0; color: var(--dim);
   font: inherit; font-size: 28px; line-height: 1;
   padding: 14px 18px; opacity: 0.35; cursor: pointer;
 }
 .gear-btn { right: 12px; }
+.view-toggle-btn { right: 140px; font-size: 22px; letter-spacing: 0.08em; }
 .board-reset-btn { right: 76px; }
-.gear-btn:hover, .board-reset-btn:hover { opacity: 1; }
+.gear-btn:hover, .board-reset-btn:hover, .view-toggle-btn:hover { opacity: 1; }
 .board-reset-btn.armed {
   color: var(--red); opacity: 1;
   font-size: 20px; font-weight: 700; letter-spacing: 0.08em;
@@ -212,3 +213,4 @@ body.doc-mode #app {
   display: block;
 }
 .map[hidden] { display: none; }
+.board[hidden] { display: none; }

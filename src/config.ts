@@ -1,9 +1,14 @@
 import type { Config } from './types';
 
 const STORAGE_KEY = 'flightwall.config';
+/** Which of the two views was showing, so the 04:00 reload does not flip it. */
+export const VIEW_KEY = 'flightwall.view';
+
+export const DEFAULT_TRAIL_MINUTES = 60;
+const MAX_TRAIL_MINUTES = 180;
 
 // Must match the cache keys used in api/routes.ts and api/photos.ts.
-const ALL_KEYS = [STORAGE_KEY, 'flightwall.routes.v1', 'flightwall.photos.v1'];
+const ALL_KEYS = [STORAGE_KEY, 'flightwall.routes.v1', 'flightwall.photos.v1', VIEW_KEY];
 
 export function clearStoredConfig(storage: Storage): void {
   for (const key of ALL_KEYS) {
@@ -23,7 +28,12 @@ export function isValidConfig(c: unknown): c is Config {
     typeof o.lon === 'number' && Number.isFinite(o.lon) && o.lon >= -180 && o.lon <= 180 &&
     typeof o.radiusKm === 'number' && Number.isFinite(o.radiusKm) &&
     o.radiusKm >= 1 && o.radiusKm <= 460 &&
-    (o.label === undefined || typeof o.label === 'string')
+    (o.label === undefined || typeof o.label === 'string') &&
+    // Optional: a config saved before the map view existed has no trailMinutes
+    // and must keep loading straight to the board.
+    (o.trailMinutes === undefined ||
+      (typeof o.trailMinutes === 'number' && Number.isFinite(o.trailMinutes) &&
+        o.trailMinutes >= 0 && o.trailMinutes <= MAX_TRAIL_MINUTES))
   );
 }
 
@@ -40,6 +50,8 @@ export function parseHash(hash: string): Config | null {
   };
   const label = params.get('label');
   if (label) cfg.label = label;
+  const trailRaw = params.get('t');
+  if (trailRaw !== null && trailRaw !== '') cfg.trailMinutes = Number(trailRaw);
   return isValidConfig(cfg) ? cfg : null;
 }
 
@@ -49,6 +61,7 @@ export function serializeToHash(cfg: Config): string {
   params.set('lon', String(cfg.lon));
   params.set('r', String(cfg.radiusKm));
   if (cfg.label) params.set('label', cfg.label);
+  if (cfg.trailMinutes !== undefined) params.set('t', String(cfg.trailMinutes));
   return `#${params.toString()}`;
 }
 
@@ -70,4 +83,9 @@ export function loadConfig(hash: string, storage: Storage): Config | null {
   } catch {
     return null;
   }
+}
+
+/** Trail window in ms, falling back to the default when unset. */
+export function trailWindowMs(cfg: Config): number {
+  return (cfg.trailMinutes ?? DEFAULT_TRAIL_MINUTES) * 60_000;
 }

@@ -1,5 +1,5 @@
 import './styles.css';
-import { loadConfig } from './config';
+import { loadConfig, trailWindowMs, VIEW_KEY } from './config';
 import { computeStageTransform } from './stage';
 import { AirplanesLiveProvider } from './api/positions';
 import { AdsbdbRoutes } from './api/routes';
@@ -10,6 +10,8 @@ import { isRoutePlausible } from './routecheck';
 import { PollLoop, type Snapshot } from './state';
 import { TrackStore } from './tracks';
 import { Board, type RowExtras } from './ui/board';
+import { MapView } from './ui/map';
+import { CoastlineStore } from './coast';
 import { renderSettings } from './ui/settings';
 import { armButton } from './ui/armed';
 import { performReset } from './reset';
@@ -55,6 +57,7 @@ window.addEventListener('hashchange', () => location.reload());
 // BACK keeps its default behavior (exits the app).
 const TIZEN_BACK = 10009;
 let openSettingsFromRemote: (() => void) | null = null;
+let toggleViewFromRemote: (() => void) | null = null;
 document.addEventListener('keydown', (e) => {
   if (docMode) {
     if (e.keyCode === TIZEN_BACK) {
@@ -66,6 +69,12 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && openSettingsFromRemote) {
     e.preventDefault();
     openSettingsFromRemote();
+    return;
+  }
+  // Every TV remote has arrows; the board has no other use for left/right.
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && toggleViewFromRemote) {
+    e.preventDefault();
+    toggleViewFromRemote();
   }
 });
 
@@ -99,6 +108,38 @@ if (!config) {
     // no orientation API — fine
   }
   const board = new Board(app, config);
+  const mapView = new MapView(app, config, new CoastlineStore());
+
+  // Both views stay constructed: rebuilding the board on every toggle would
+  // drop its row animations and re-fetch nothing useful.
+  let showingMap = false;
+  try {
+    showingMap = localStorage.getItem(VIEW_KEY) === 'map';
+  } catch {
+    // storage unavailable: start on the board
+  }
+  const applyView = (): void => {
+    mapView.setVisible(showingMap);
+    board.setVisible(!showingMap);
+    viewBtn.textContent = showingMap ? 'BOARD' : 'MAP';
+    try {
+      localStorage.setItem(VIEW_KEY, showingMap ? 'map' : 'board');
+    } catch {
+      // storage unavailable: the preference just will not survive a reload
+    }
+  };
+  const toggleView = (): void => {
+    showingMap = !showingMap;
+    applyView();
+    rerender();
+  };
+
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'view-toggle-btn';
+  viewBtn.setAttribute('aria-label', 'Switch between board and map');
+  viewBtn.addEventListener('click', toggleView);
+  app.appendChild(viewBtn);
+  applyView();
 
   let settingsOpen = false;
   const gearBtn = document.createElement('button');
@@ -113,6 +154,7 @@ if (!config) {
   };
   gearBtn.addEventListener('click', openSettings);
   openSettingsFromRemote = openSettings;
+  toggleViewFromRemote = toggleView;
   app.appendChild(gearBtn);
 
   const resetBtn = document.createElement('button');
@@ -136,9 +178,8 @@ if (!config) {
   let lastSnapshot: Snapshot | null = null;
 
   // Flight paths, accumulated forward from launch — the API only reports what
-  // is in radius now, so there is nothing to backfill. The window becomes the
-  // configurable trailMinutes; 60 min is its intended default.
-  const TRAIL_WINDOW_MS = 60 * 60_000;
+  // is in radius now, so there is nothing to backfill.
+  const TRAIL_WINDOW_MS = trailWindowMs(config);
   const tracks = new TrackStore();
 
   // Route as displayed for one aircraft: cached route gated by the corridor
@@ -163,6 +204,7 @@ if (!config) {
     if (!lastSnapshot) return;
     board.update(lastSnapshot, buildExtras(lastSnapshot));
     updateSpotlight(lastSnapshot);
+    if (showingMap) mapView.update(lastSnapshot, tracks.tracks());
   }
 
   // adsbdb first; on a definitive miss, hexdb's callsign→ICAO-pair as second
@@ -223,6 +265,7 @@ if (!config) {
       // that is when these positions were true.
       tracks.append(snap.aircraft, snap.lastSuccessAt);
       tracks.prune(snap.lastSuccessAt, TRAIL_WINDOW_MS);
+      if (showingMap) mapView.update(snap, tracks.tracks());
       const now = Date.now();
       for (const a of snap.aircraft) {
         const cs = a.callsign;
@@ -299,6 +342,7 @@ if (!config) {
   setInterval(() => {
     if (settingsOpen) return;
     board.tickClock(Date.now(), lastSnapshot?.lastSuccessAt ?? bootAt);
+    if (showingMap && lastSnapshot) mapView.update(lastSnapshot, tracks.tracks());
   }, 1000);
 
   // Stall watchdog: if no tick for 90 s while visible, restart the loop.
