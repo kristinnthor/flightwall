@@ -16,13 +16,23 @@ describe('upstreamPathFor', () => {
     expect(upstreamPathFor('/v2/lat/64/lon/-21/dist/25/')).toBe('/v2/lat/64/lon/-21/dist/25');
   });
 
-  it('refuses anything that is not the point query', () => {
+  it('refuses anything that is not one of the two supported layouts', () => {
     for (const p of [
-      '/', '/v2', '/v1/lat/64/lon/-21/dist/25', '/v2/point/64/-21/25',
+      '/', '/v2', '/v1/lat/64/lon/-21/dist/25', '/v2/point/64/-21',
       '/v2/lat/64/lon/-21', '/anything', '/v2/lat/64/lon/-21/dist/25/extra',
+      '/v2/point/64/-21/25/extra',
     ]) {
       expect(upstreamPathFor(p)).toBeNull();
     }
+  });
+
+  // A base URL with no {lat} placeholders produces this layout, which is what
+  // makes the TV configurable without typing curly braces on a remote.
+  it('maps the brace-free /point/ layout onto the same upstream path', () => {
+    expect(upstreamPathFor('/v2/point/64/-21/25')).toBe('/v2/lat/64/lon/-21/dist/25');
+    expect(upstreamPathFor('/v3/point/64.146588/-21.9064249/162/')).toBe(
+      '/v3/lat/64.146588/lon/-21.9064249/dist/162',
+    );
   });
 
   // Without this it could be coaxed into requesting other upstream paths.

@@ -57,7 +57,25 @@ npm run package:tizen                              # produces FlightWall.wgt
 tizen install -n FlightWall.wgt -s <SERIAL>
 tizen run -p FLTWLL2026.FlightWall -s <SERIAL>     # launch from the PC (optional)
 ```
-The app appears on the TV home row. Launch it once; done.
+The app appears on the TV home row. Launch it once, then **set the API URL**
+(below) — without it the app has no reachable feed and sits on NO SIGNAL.
+
+### Pointing the TV app at your proxy
+
+The packaged app has no address bar, so it cannot be configured by opening a
+URL with `#...&api=...` the way the browser route is. Do it on the app's own
+settings screen:
+
+1. Press **OK/Enter** on the board to open Settings.
+2. Arrow down to **API URL** and press OK for the on-screen keyboard.
+3. Type your worker's base URL — no curly braces needed:
+   `https://flightwall-proxy.<you>.workers.dev/v2`
+4. **START**.
+
+The value is stored on the TV and survives app updates, so this is a one-time
+step. It is needed because the free ADS-B feeds refuse browser requests, and a
+Tizen webview is a browser as far as they are concerned — see "Choosing a data
+feed" in the README.
 
 ### Updating later
 Bump `version` in `tizen/config.xml`, re-run the build/install commands above.

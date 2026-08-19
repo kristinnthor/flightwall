@@ -87,7 +87,7 @@ describe('worker fetch handler', () => {
   });
 
   it('refuses a path outside the point-query shape', async () => {
-    for (const p of ['/v2/point/64/-21/25', '/admin', '/v2/lat/64/lon/-21/dist/999']) {
+    for (const p of ['/v2/nope/64/-21/25', '/admin', '/v2/lat/64/lon/-21/dist/999']) {
       const res = await call(p);
       expect(res.status).toBe(404);
     }
@@ -163,7 +163,8 @@ describe('identity endpoint', () => {
       expect(body.worker).toBe('flightwall-proxy');
       expect(body.upstream).toBe('ADSB.FI');
       expect(body.origin).toBeNull();
-      expect(body.originAllowed).toBe(false);
+      // No Origin means a native client, which is served — see isServed.
+      expect(body.originAllowed).toBe(true);
     }
     expect(fetched).toEqual([]);
   });
@@ -186,7 +187,8 @@ describe('identity endpoint', () => {
   it('publishes the path shape a caller has to match', async () => {
     expect((await bare('/')).headers.get('X-Worker')).toBe('flightwall-proxy');
     const body = await (await bare('/')).json();
-    expect(body.pathShape).toBe('/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}');
+    expect(body.pathShape).toContain('/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}');
+    expect(body.pathShape).toContain('/{v2|v3}/point/{lat}/{lon}/{nm}');
   });
 
   it('grants CORS to an allowed origin but not to a stranger', async () => {
@@ -209,5 +211,50 @@ describe('identity endpoint', () => {
       const proxied = (await req('/v2/lat/64/lon/-21/dist/25')).status !== 403;
       expect(reported).toBe(proxied);
     }
+  });
+});
+
+// The packaged Tizen app is not a web page: it has no address bar to paste an
+// api= URL into, and its webview sends no Origin. Both of those made the proxy
+// unreachable from the TV, which is the only surface this wall actually runs on.
+describe('packaged TV app', () => {
+  const noOrigin = (path) => worker.fetch(new Request(`https://proxy.example${path}`), ENV, ctx);
+
+  it('serves a client that sends no Origin at all', async () => {
+    const res = await noOrigin('/v2/lat/64/lon/-21/dist/25');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveProperty('aircraft');
+    expect(fetched).toEqual(['https://opendata.adsb.fi/api/v2/lat/64/lon/-21/dist/25']);
+  });
+
+  // Not a loophole: a browser always attaches Origin to a cross-origin fetch,
+  // so a page cannot reach this branch to read data CORS would have denied it.
+  it('still refuses a browser origin that is not on the list', async () => {
+    const res = await worker.fetch(
+      new Request('https://proxy.example/v2/lat/64/lon/-21/dist/25', {
+        headers: { Origin: 'https://evil.example' },
+      }),
+      ENV,
+      ctx,
+    );
+    expect(res.status).toBe(403);
+    expect(fetched).toEqual([]);
+  });
+
+  // A URL typed on a TV remote should need no curly braces: `{` and `}` are
+  // several layers deep on the Samsung on-screen keyboard.
+  it('accepts the brace-free /point/ layout a bare base URL produces', async () => {
+    const res = await noOrigin('/v2/point/64.146588/-21.9064249/162');
+    expect(res.status).toBe(200);
+    expect(fetched).toEqual([
+      'https://opendata.adsb.fi/api/v2/lat/64.146588/lon/-21.9064249/dist/162',
+    ]);
+  });
+
+  it('applies the same coordinate and distance limits to both layouts', async () => {
+    for (const bad of ['/v2/point/91/-21/25', '/v2/point/64/-181/25', '/v2/point/64/-21/999']) {
+      expect((await noOrigin(bad)).status).toBe(404);
+    }
+    expect(fetched).toEqual([]);
   });
 });

@@ -82,11 +82,11 @@ describe('renderSettings', () => {
     expect(document.activeElement).toBe(lat);
     down();
     expect(document.activeElement).toBe(lon);
-    down(); down(); down(); down(); // r -> t -> label -> geo button
+    down(); down(); down(); down(); down(); // r -> t -> label -> api -> geo button
     expect(document.activeElement).toBe(root.querySelector('.geo-btn'));
     document.activeElement?.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(root.querySelector('input[name=label]'));
+    expect(document.activeElement).toBe(root.querySelector('input[name=api]'));
   });
 
   it('ArrowRight/ArrowLeft move between buttons but not inside inputs', () => {
@@ -182,3 +182,40 @@ describe('apiBase passthrough', () => {
   });
 });
 
+describe('renderSettings API field', () => {
+  const render = (initial = {}) => {
+    const root = document.getElementById('app')!;
+    renderSettings(root, initial, 'https://x/fw/');
+    return root;
+  };
+  const api = (root: HTMLElement) => root.querySelector<HTMLInputElement>('input[name=api]')!;
+
+  it('shows an existing apiBase so it can be edited, not just preserved', () => {
+    const root = render({ lat: 64, lon: -21, radiusKm: 100, apiBase: 'https://proxy.example/v2' });
+    expect(api(root).value).toBe('https://proxy.example/v2');
+  });
+
+  it('carries a typed URL into the shared link', () => {
+    const root = render({ lat: 64, lon: -21, radiusKm: 100 });
+    api(root).value = 'https://proxy.example/v2';
+    api(root).dispatchEvent(new Event('input', { bubbles: true }));
+    const shown = root.querySelector('.share-url')!.textContent!;
+    expect(new URLSearchParams(shown.split('#')[1]).get('api')).toBe('https://proxy.example/v2');
+  });
+
+  // Blank has to mean "use the built-in feeds", not "api=" — an empty value in
+  // the hash would pin the wall to a base URL of nothing.
+  it('omits api entirely when the field is left blank', () => {
+    const root = render({ lat: 64, lon: -21, radiusKm: 100 });
+    const shown = root.querySelector('.share-url')!.textContent!;
+    expect(new URLSearchParams(shown.split('#')[1]).has('api')).toBe(false);
+  });
+
+  it('clears a previously set apiBase when the field is emptied', () => {
+    const root = render({ lat: 64, lon: -21, radiusKm: 100, apiBase: 'https://proxy.example/v2' });
+    api(root).value = '   ';
+    api(root).dispatchEvent(new Event('input', { bubbles: true }));
+    const shown = root.querySelector('.share-url')!.textContent!;
+    expect(new URLSearchParams(shown.split('#')[1]).has('api')).toBe(false);
+  });
+});

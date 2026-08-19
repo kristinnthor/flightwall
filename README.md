@@ -59,16 +59,23 @@ headers:
 {
   "worker": "flightwall-proxy",
   "upstream": "ADSB.FI",
-  "pathShape": "/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm}",
+  "pathShape": "/{v2|v3}/lat/{lat}/lon/{lon}/dist/{nm} or /{v2|v3}/point/{lat}/{lon}/{nm}",
   "origin": null,
-  "originAllowed": false
+  "originAllowed": true
 }
 ```
 
-`originAllowed: false` is expected for a browser visit, which sends no `Origin`
-at all. If you instead get a Cloudflare error page, nothing is deployed at that
+If you instead get a Cloudflare error page, nothing is deployed at that
 hostname — every response the worker itself produces, including its failures,
 carries `"worker": "flightwall-proxy"` and an `X-Worker` header.
+
+The origin rule is not "browsers only". A request carrying **no** `Origin` is
+served: browsers always attach one to a cross-origin fetch, so a request
+without it is a native client — the packaged TV app, or curl — which could
+call adsb.fi directly and gains nothing through the proxy. A request that does
+carry an `Origin` must be on the `ALLOWED_ORIGINS` list, which is the case the
+rule actually guards: a web page using the proxy to read data CORS would
+otherwise deny it.
 
 ### Deploying the worker from CI instead
 
@@ -107,7 +114,9 @@ forwards only to adsb.fi, and refuses origins outside `ALLOWED_ORIGINS` in
 
 Setting `api` pins the feed to exactly that source with no failover, which is
 what you want when testing whether something works. A bare base URL keeps the
-older `/point/{lat}/{lon}/{nm}` layout. Aircraft arrays named `ac` or
+older `/point/{lat}/{lon}/{nm}` layout — and the worker accepts that shape too,
+so on a TV you can type just `https://<worker-host>/v2` and skip the curly
+braces, which are several layers deep on a Samsung on-screen keyboard. Aircraft arrays named `ac` or
 `aircraft` are both understood.
 
 ## Board and map
