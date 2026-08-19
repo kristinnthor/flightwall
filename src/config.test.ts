@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseHash, serializeToHash, isValidConfig, loadConfig, clearStoredConfig } from './config';
+import {
+  parseHash, serializeToHash, isValidConfig, loadConfig, clearStoredConfig,
+  trailWindowMs, DEFAULT_TRAIL_MINUTES, VIEW_KEY,
+} from './config';
 
 describe('parseHash', () => {
   it('parses a full hash', () => {
@@ -64,5 +67,63 @@ describe('clearStoredConfig', () => {
     expect(localStorage.getItem('flightwall.routes.v1')).toBeNull();
     expect(localStorage.getItem('flightwall.photos.v1')).toBeNull();
     expect(localStorage.getItem('unrelated')).toBe('keep');
+  });
+});
+
+describe('trailMinutes', () => {
+  const base = '#lat=64&lon=-21&r=50';
+
+  it('reads t from the hash', () => {
+    expect(parseHash(`${base}&t=120`)?.trailMinutes).toBe(120);
+  });
+
+  it('accepts 0, meaning positions with no trail', () => {
+    expect(parseHash(`${base}&t=0`)?.trailMinutes).toBe(0);
+  });
+
+  // The regression that matters: every config saved before the map view
+  // existed has no t, and must still load straight to the board.
+  it('is optional — a config without t stays valid', () => {
+    const cfg = parseHash(base);
+    expect(cfg).not.toBeNull();
+    expect(cfg?.trailMinutes).toBeUndefined();
+    expect(isValidConfig({ lat: 64, lon: -21, radiusKm: 50 })).toBe(true);
+  });
+
+  it('defaults to 60 minutes when unset', () => {
+    expect(trailWindowMs({ lat: 64, lon: -21, radiusKm: 50 })).toBe(60 * 60_000);
+    expect(DEFAULT_TRAIL_MINUTES).toBe(60);
+  });
+
+  it('honours an explicit window, including zero', () => {
+    expect(trailWindowMs({ lat: 64, lon: -21, radiusKm: 50, trailMinutes: 90 })).toBe(90 * 60_000);
+    expect(trailWindowMs({ lat: 64, lon: -21, radiusKm: 50, trailMinutes: 0 })).toBe(0);
+  });
+
+  it('rejects out-of-range and non-numeric values', () => {
+    expect(parseHash(`${base}&t=-1`)).toBeNull();
+    expect(parseHash(`${base}&t=181`)).toBeNull();
+    expect(parseHash(`${base}&t=abc`)).toBeNull();
+  });
+
+  it('round-trips through serializeToHash', () => {
+    const cfg = { lat: 64, lon: -21, radiusKm: 50, trailMinutes: 25 };
+    expect(parseHash(serializeToHash(cfg))).toEqual(cfg);
+    const zero = { lat: 64, lon: -21, radiusKm: 50, trailMinutes: 0 };
+    expect(parseHash(serializeToHash(zero))).toEqual(zero);
+  });
+
+  it('omits t from the hash when unset', () => {
+    // Parsed, not substring-matched: "lat=64" contains "t=".
+    const hash = serializeToHash({ lat: 64, lon: -21, radiusKm: 50 });
+    expect(new URLSearchParams(hash.slice(1)).has('t')).toBe(false);
+  });
+});
+
+describe('clearStoredConfig', () => {
+  it('clears the saved view preference too', () => {
+    localStorage.setItem(VIEW_KEY, 'map');
+    clearStoredConfig(localStorage);
+    expect(localStorage.getItem(VIEW_KEY)).toBeNull();
   });
 });

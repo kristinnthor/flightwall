@@ -128,3 +128,15 @@ describe('Board', () => {
     expect(root.querySelector<HTMLElement>('.spotlight')?.hidden).toBe(true);
   });
 });
+
+describe('Board.setVisible', () => {
+  it('hides and shows the board for the view toggle', () => {
+    const root = document.createElement('div');
+    const board = new Board(root, CFG);
+    board.setVisible(false);
+    expect(root.querySelector<HTMLElement>('.board')!.hidden).toBe(true);
+    board.setVisible(true);
+    expect(root.querySelector<HTMLElement>('.board')!.hidden).toBe(false);
+  });
+});
+

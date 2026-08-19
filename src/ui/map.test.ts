@@ -303,3 +303,53 @@ describe('MapView', () => {
     expect(ctx.calls.some((c) => c.op === 'roundRect')).toBe(false);
   });
 });
+
+describe('MapView coastline arrival', () => {
+  /** Store double that resolves after the caller has already drawn a frame. */
+  function deferredCoast(lines: number[][]) {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const store = {
+      load: () => gate.then(() => [{ lines }]),
+    } as unknown as import('../coast').CoastlineStore;
+    return { store, release };
+  }
+
+  it('repaints when tiles land after the first frame', async () => {
+    const ctx = stubContext();
+    const { store, release } = deferredCoast([[-22, 64, -21, 64.5, -20, 64.2]]);
+    const view = new MapView(root(), CFG, store, { context: ctx });
+
+    view.update(snap([ac('a')]), new Map());
+    const framesBefore = opsOf(ctx, 'clearRect').length;
+    expect(framesBefore).toBe(1);
+
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Without the repaint the coastline would stay invisible until the next
+    // poll, up to five seconds later.
+    expect(opsOf(ctx, 'clearRect').length).toBe(framesBefore + 1);
+    expect(opsOf(ctx, 'clip').length).toBeGreaterThan(0);
+  });
+
+  it('does not repaint before anything has been drawn', async () => {
+    const ctx = stubContext();
+    const { store, release } = deferredCoast([[-22, 64, -21, 64.5]]);
+    new MapView(root(), CFG, store, { context: ctx });
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(opsOf(ctx, 'clearRect')).toHaveLength(0);
+  });
+
+  it('does not repaint when the tiles turn out to be empty', async () => {
+    const ctx = stubContext();
+    const { store, release } = deferredCoast([]);
+    const view = new MapView(root(), CFG, store, { context: ctx });
+    view.update(snap([ac('a')]), new Map());
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(opsOf(ctx, 'clearRect')).toHaveLength(1);
+  });
+});
+

@@ -82,7 +82,7 @@ describe('renderSettings', () => {
     expect(document.activeElement).toBe(lat);
     down();
     expect(document.activeElement).toBe(lon);
-    down(); down(); down(); // r -> label -> geo button
+    down(); down(); down(); down(); // r -> t -> label -> geo button
     expect(document.activeElement).toBe(root.querySelector('.geo-btn'));
     document.activeElement?.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
@@ -130,3 +130,40 @@ describe('renderSettings', () => {
     reloadSpy.mockRestore();
   });
 });
+
+describe('trail minutes field', () => {
+  it('renders the configured value', () => {
+    const root = document.createElement('div');
+    renderSettings(root, { lat: 64, lon: -21, radiusKm: 50, trailMinutes: 90 }, 'https://x/');
+    expect(root.querySelector<HTMLInputElement>('input[name=t]')!.value).toBe('90');
+  });
+
+  it('is blank when unset, and the share link still works', () => {
+    const root = document.createElement('div');
+    renderSettings(root, { lat: 64, lon: -21, radiusKm: 50 }, 'https://x/');
+    expect(root.querySelector<HTMLInputElement>('input[name=t]')!.value).toBe('');
+    const url = root.querySelector<HTMLElement>('.share-url')!.textContent!;
+    expect(url).toContain('lat=64');
+    expect(new URLSearchParams(url.split('#')[1]).has('t')).toBe(false);
+  });
+
+  it('puts an entered value into the share link', () => {
+    const root = document.createElement('div');
+    renderSettings(root, { lat: 64, lon: -21, radiusKm: 50 }, 'https://x/');
+    const t = root.querySelector<HTMLInputElement>('input[name=t]')!;
+    t.value = '15';
+    root.dispatchEvent(new Event('input', { bubbles: true }));
+    const url = root.querySelector<HTMLElement>('.share-url')!.textContent!;
+    expect(new URLSearchParams(url.split('#')[1]).get('t')).toBe('15');
+  });
+
+  it('marks an out-of-range window invalid', () => {
+    const root = document.createElement('div');
+    renderSettings(root, { lat: 64, lon: -21, radiusKm: 50 }, 'https://x/');
+    const t = root.querySelector<HTMLInputElement>('input[name=t]')!;
+    t.value = '999';
+    root.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(root.querySelector<HTMLElement>('.share-url')!.textContent).toContain('INVALID');
+  });
+});
+

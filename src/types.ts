@@ -3,6 +3,9 @@ export interface Config {
   lon: number;
   radiusKm: number;
   label?: string;
+  /** Minutes of flight path drawn on the map. 0 shows positions with no trail.
+   *  Optional so configs saved before the map view existed stay valid. */
+  trailMinutes?: number;
 }
 
 /** Normalized airborne aircraft (ground/positionless targets are filtered out upstream). */

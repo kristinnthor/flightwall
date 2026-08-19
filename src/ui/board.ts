@@ -71,6 +71,11 @@ export class Board {
     root.appendChild(this.boardEl);
   }
 
+  /** Toggled against the map view; both stay constructed so neither loses state. */
+  setVisible(visible: boolean): void {
+    this.boardEl.hidden = !visible;
+  }
+
   update(snap: Snapshot, extras: Map<string, RowExtras>): void {
     const visible = snap.aircraft.slice(0, MAX_ROWS);
     const visibleHexes = new Set(visible.map((a) => a.hex));
