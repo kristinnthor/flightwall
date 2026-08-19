@@ -37,21 +37,31 @@ export function isValidConfig(c: unknown): c is Config {
   );
 }
 
+/**
+ * A numeric hash parameter, trimmed, with blank treated as absent.
+ *
+ * `Number('')` and `Number(' ')` are both 0, and 0 is a perfectly valid
+ * latitude and a perfectly valid "no trail" — so a blank or whitespace value
+ * would otherwise parse as a deliberate zero rather than as missing.
+ */
+function numParam(params: URLSearchParams, key: string): number | undefined {
+  const raw = params.get(key);
+  if (raw === null) return undefined;
+  const trimmed = raw.trim();
+  return trimmed === '' ? undefined : Number(trimmed);
+}
+
 export function parseHash(hash: string): Config | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  const latRaw = params.get('lat');
-  const lonRaw = params.get('lon');
-  const rRaw = params.get('r');
-  if (!latRaw || !lonRaw || !rRaw) return null;
-  const cfg: Record<string, unknown> = {
-    lat: Number(latRaw),
-    lon: Number(lonRaw),
-    radiusKm: Number(rRaw),
-  };
+  const lat = numParam(params, 'lat');
+  const lon = numParam(params, 'lon');
+  const radiusKm = numParam(params, 'r');
+  if (lat === undefined || lon === undefined || radiusKm === undefined) return null;
+  const cfg: Record<string, unknown> = { lat, lon, radiusKm };
   const label = params.get('label');
   if (label) cfg.label = label;
-  const trailRaw = params.get('t');
-  if (trailRaw !== null && trailRaw !== '') cfg.trailMinutes = Number(trailRaw);
+  const trailMinutes = numParam(params, 't');
+  if (trailMinutes !== undefined) cfg.trailMinutes = trailMinutes;
   return isValidConfig(cfg) ? cfg : null;
 }
 

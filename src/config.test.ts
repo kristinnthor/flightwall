@@ -127,3 +127,35 @@ describe('clearStoredConfig', () => {
     expect(localStorage.getItem(VIEW_KEY)).toBeNull();
   });
 });
+
+// Number('') and Number(' ') are both 0, and 0 is a valid latitude and a valid
+// "no trail" — so a blank value must read as missing, not as a deliberate zero.
+describe('blank and whitespace hash parameters', () => {
+  it('treats a whitespace trail window as unset, not as zero', () => {
+    const cfg = parseHash('#lat=64&lon=-21&r=50&t=%20');
+    expect(cfg).not.toBeNull();
+    expect(cfg?.trailMinutes).toBeUndefined();
+    expect(trailWindowMs(cfg!)).toBe(DEFAULT_TRAIL_MINUTES * 60_000);
+  });
+
+  it('treats an empty trail window as unset', () => {
+    expect(parseHash('#lat=64&lon=-21&r=50&t=')?.trailMinutes).toBeUndefined();
+  });
+
+  it('tolerates surrounding whitespace on a real value', () => {
+    expect(parseHash('#lat=64&lon=-21&r=50&t=%2015%20')?.trailMinutes).toBe(15);
+    expect(parseHash('#lat=%2064%20&lon=-21&r=50')?.lat).toBe(64);
+  });
+
+  it('rejects a whitespace-only position instead of reading it as 0,0', () => {
+    expect(parseHash('#lat=%20&lon=-21&r=50')).toBeNull();
+    expect(parseHash('#lat=64&lon=%20&r=50')).toBeNull();
+    expect(parseHash('#lat=64&lon=-21&r=%20')).toBeNull();
+  });
+
+  it('still accepts a genuine zero', () => {
+    expect(parseHash('#lat=0&lon=0&r=50')?.lat).toBe(0);
+    expect(parseHash('#lat=64&lon=-21&r=50&t=0')?.trailMinutes).toBe(0);
+  });
+});
+
